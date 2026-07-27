@@ -1,0 +1,29 @@
+# ---- Dependencies ----
+node_modules/
+**/node_modules/
+
+# ---- Build output ----
+dist/
+frontend/dist/
+build/
+
+# ---- Secrets / environment (NEVER commit these) ----
+.env
+.env.local
+.env.*.local
+backend/.env
+# (kept on purpose: .env.example and .env.production — they hold no secrets)
+
+# ---- Logs ----
+*.log
+npm-debug.log*
+logs/
+
+# ---- OS / editor junk ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ---- Local originals not needed in the repo ----
+new/

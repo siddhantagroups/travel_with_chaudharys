@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: twc_mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - twc-network
+
+  backend:
+    build: ./backend
+    container_name: twc_backend
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017/travelwithchaudharys
+      - PORT=5000
+    depends_on:
+      - mongodb
+    networks:
+      - twc-network
+
+  frontend:
+    build: ./frontend
+    container_name: twc_frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - twc-network
+
+volumes:
+  mongo_data:
+
+networks:
+  twc-network:
+    driver: bridge
