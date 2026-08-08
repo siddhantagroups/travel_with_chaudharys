@@ -85,13 +85,14 @@ function BookingSteps({ current }) {
 
 export default function App() {
   const [currentView, setCurrentView] = useState('public'); // 'public' or 'admin'
-  const [activeService, setActiveService] = useState('buses'); // 'buses', 'cabs', 'contracts', etc.
+  const [activeService, setActiveService] = useState('contracts'); // 'buses', 'cabs', 'contracts', etc.
   
   // API States
   const [vehicles, setVehicles] = useState([]);
   const [routes, setRoutes] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [inquiries, setInquiries] = useState([]);
+  const [clients, setClients] = useState([]);
 
   // Auth state
   const [authToken, setAuthToken] = useState(() => {
@@ -191,8 +192,10 @@ export default function App() {
     try {
       const vRes = await fetch(`${API_BASE}/vehicles`);
       const rRes = await fetch(`${API_BASE}/routes`);
+      const cRes = await fetch(`${API_BASE}/clients`);
       if (vRes.ok) setVehicles(await vRes.json());
       if (rRes.ok) setRoutes(await rRes.json());
+      if (cRes.ok) setClients(await cRes.json());
     } catch (err) {
       console.error('Error fetching public data:', err);
     }
@@ -240,12 +243,20 @@ export default function App() {
   };
 
   // --- AUTH HANDLERS ---
-  const handleLoginSuccess = (token, user) => {
+  // Holds back until the admin data is in, so the dashboard opens already
+  // populated instead of flashing empty. minMs keeps the sign-in transition on
+  // screen long enough to read when the fetch returns almost instantly.
+  const handleLoginSuccess = async (token, user, minMs = 0) => {
     try { localStorage.setItem('twc_admin_token', token); } catch { /* ignore */ }
     setAuthToken(token);
-    setAdminUser(user);
     setView('admin');
-    fetchAdminData();
+
+    const startedAt = Date.now();
+    await fetchAdminData();
+    const remaining = minMs - (Date.now() - startedAt);
+    if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
+
+    setAdminUser(user); // this swaps the gate for the panel
   };
 
   const handleLogout = () => {
@@ -490,6 +501,8 @@ export default function App() {
   // --- ADMIN HANDLERS (all require a valid session token via authFetch) ---
 
   // Vehicles
+  // Admin write handlers all resolve to { ok, error } so the panel can tell the
+  // owner whether the change actually reached the database.
   const handleAddVehicle = async (vData) => {
     try {
       const res = await authFetch(`${API_BASE}/vehicles`, {
@@ -497,11 +510,12 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(vData)
       });
-      if (res.ok) {
-        await refreshAll();
-      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: data.error || 'Could not add that vehicle.' };
+      await refreshAll();
+      return { ok: true };
     } catch (err) {
-      console.error(err);
+      return { ok: false, error: 'Could not reach the server.' };
     }
   };
 
@@ -512,23 +526,55 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(vData)
       });
-      if (res.ok) {
-        await refreshAll();
-      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: data.error || 'Could not save those changes.' };
+      await refreshAll();
+      return { ok: true };
     } catch (err) {
-      console.error(err);
+      return { ok: false, error: 'Could not reach the server.' };
+    }
+  };
+
+  // Clients (schools / companies under contract)
+  const handleAddClient = async (cData) => {
+    try {
+      const res = await authFetch(`${API_BASE}/clients`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cData)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: data.error || 'Could not add that client.' };
+      await refreshAll();
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: 'Could not reach the server.' };
+    }
+  };
+
+  const handleDeleteClient = async (id, freeVehicles = false) => {
+    try {
+      const url = `${API_BASE}/clients/${id}${freeVehicles ? '?freeVehicles=1' : ''}`;
+      const res = await authFetch(url, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: data.error || 'Could not remove that client.' };
+      await refreshAll();
+      return { ok: true, freedVehicles: data.freedVehicles || 0 };
+    } catch (err) {
+      return { ok: false, error: 'Could not reach the server.' };
     }
   };
 
   const handleDeleteVehicle = async (id) => {
-    if (!confirm('Are you sure you want to delete this vehicle from the fleet?')) return;
+    // Confirmation is handled by the panel's own dialog, not window.confirm.
     try {
       const res = await authFetch(`${API_BASE}/vehicles/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        await refreshAll();
-      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: data.error || 'Could not remove that vehicle.' };
+      await refreshAll();
+      return { ok: true };
     } catch (err) {
-      console.error(err);
+      return { ok: false, error: 'Could not reach the server.' };
     }
   };
 
@@ -540,11 +586,12 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(rData)
       });
-      if (res.ok) {
-        await refreshAll();
-      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: data.error || 'Could not schedule that route.' };
+      await refreshAll();
+      return { ok: true };
     } catch (err) {
-      console.error(err);
+      return { ok: false, error: 'Could not reach the server.' };
     }
   };
 
@@ -564,14 +611,15 @@ export default function App() {
   };
 
   const handleDeleteRoute = async (id) => {
-    if (!confirm('Delete this scheduled route?')) return;
+    // Confirmation is handled by the panel's own dialog, not window.confirm.
     try {
       const res = await authFetch(`${API_BASE}/routes/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        await refreshAll();
-      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: data.error || 'Could not delete that route.' };
+      await refreshAll();
+      return { ok: true };
     } catch (err) {
-      console.error(err);
+      return { ok: false, error: 'Could not reach the server.' };
     }
   };
 
@@ -656,13 +704,15 @@ export default function App() {
   return (
     <div className="flex flex-col min-h-screen">
       
-      {/* Navbar */}
-      <Navbar
-        currentView={currentView}
-        setCurrentView={setView}
-        activeService={activeService}
-        setActiveService={setActiveService}
-      />
+      {/* Navbar — hidden on the admin sign-in gate, which stands on its own */}
+      {!(currentView === 'admin' && !adminUser) && (
+        <Navbar
+          currentView={currentView}
+          setCurrentView={setView}
+          activeService={activeService}
+          setActiveService={setActiveService}
+        />
+      )}
 
       {/* Main View Area */}
       {currentView === 'admin' ? (
@@ -672,11 +722,14 @@ export default function App() {
             routes={routes}
             bookings={bookings}
             inquiries={inquiries}
+            clients={clients}
             adminUser={adminUser}
             onLogout={handleLogout}
             onAddVehicle={handleAddVehicle}
             onUpdateVehicle={handleUpdateVehicle}
             onDeleteVehicle={handleDeleteVehicle}
+            onAddClient={handleAddClient}
+            onDeleteClient={handleDeleteClient}
             onAddRoute={handleAddRoute}
             onUpdateRoute={handleUpdateRoute}
             onDeleteRoute={handleDeleteRoute}
@@ -1120,8 +1173,8 @@ export default function App() {
         />
       )}
 
-      {/* Footer */}
-      <Footer setCurrentView={setView} />
+      {/* Footer — the admin area is a workspace, not a public page */}
+      {currentView !== 'admin' && <Footer setCurrentView={setView} />}
 
     </div>
   );

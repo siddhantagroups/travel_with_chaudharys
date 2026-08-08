@@ -9,6 +9,7 @@ import Vehicle from './models/Vehicle.js';
 import Route from './models/Route.js';
 import Booking from './models/Booking.js';
 import ContractInquiry from './models/ContractInquiry.js';
+import Client from './models/Client.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -30,6 +31,12 @@ let mockVehicles = [];
 let mockRoutes = [];
 let mockBookings = [];
 let mockInquiries = [];
+let mockClients = [
+  { _id: 'c1', name: 'Baddi International School', kind: 'School', contactPerson: '', phone: '' },
+  { _id: 'c2', name: 'Eicher Parwanoo', kind: 'Company', contactPerson: '', phone: '' },
+  { _id: 'c3', name: 'Eicher School', kind: 'School', contactPerson: '', phone: '' },
+  { _id: 'c4', name: 'DAV School', kind: 'School', contactPerson: '', phone: '' },
+];
 
 const seedMockData = () => {
   mockVehicles = [
@@ -165,6 +172,17 @@ const seedMockData = () => {
 // Auto-seed MongoDB if online
 if (process.env.USE_MOCK_DB === 'false') {
   try {
+    // Clients seed independently of vehicles so existing databases pick them up.
+    if (await Client.countDocuments() === 0) {
+      await Client.insertMany([
+        { name: 'Baddi International School', kind: 'School' },
+        { name: 'Eicher Parwanoo', kind: 'Company' },
+        { name: 'Eicher School', kind: 'School' },
+        { name: 'DAV School', kind: 'School' },
+      ]);
+      console.log('Seeded contract clients.');
+    }
+
     const vehicleCount = await Vehicle.countDocuments();
     if (vehicleCount === 0) {
       console.log('No vehicles found in database. Auto-seeding MongoDB data...');
@@ -414,6 +432,89 @@ app.delete('/api/vehicles/:id', requireAdmin, async (req, res) => {
     const vehicle = await Vehicle.findByIdAndDelete(req.params.id);
     if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' });
     res.json({ message: 'Vehicle deleted successfully', vehicle });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// 1b. CLIENTS CRUD — schools and companies under contract
+app.get('/api/clients', async (req, res) => {
+  try {
+    if (process.env.USE_MOCK_DB === 'true') {
+      return res.json(mockClients);
+    }
+    const clients = await Client.find().sort({ name: 1 });
+    res.json(clients);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/clients', requireAdmin, async (req, res) => {
+  try {
+    const name = String(req.body.name || '').trim();
+    const kind = req.body.kind === 'Company' ? 'Company' : 'School';
+    if (!name) return res.status(400).json({ error: 'Name is required.' });
+
+    if (process.env.USE_MOCK_DB === 'true') {
+      if (mockClients.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+        return res.status(409).json({ error: 'A client with that name already exists.' });
+      }
+      const newC = {
+        _id: 'c_' + Math.random().toString(36).substring(2, 9),
+        name, kind,
+        contactPerson: req.body.contactPerson || '',
+        phone: req.body.phone || ''
+      };
+      mockClients.push(newC);
+      return res.status(201).json(newC);
+    }
+
+    const exists = await Client.findOne({ name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') });
+    if (exists) return res.status(409).json({ error: 'A client with that name already exists.' });
+
+    const client = new Client({ name, kind, contactPerson: req.body.contactPerson, phone: req.body.phone });
+    await client.save();
+    res.status(201).json(client);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Pass ?freeVehicles=1 to release any buses on this contract back to public
+// booking as part of the delete. Without it, a contract in use is refused.
+app.delete('/api/clients/:id', requireAdmin, async (req, res) => {
+  const freeVehicles = req.query.freeVehicles === '1' || req.query.freeVehicles === 'true';
+  try {
+    if (process.env.USE_MOCK_DB === 'true') {
+      const idx = mockClients.findIndex(c => c._id === req.params.id);
+      if (idx === -1) return res.status(404).json({ error: 'Client not found' });
+
+      const name = mockClients[idx].name;
+      const inUse = mockVehicles.filter(v => v.assignedTo === name);
+      if (inUse.length > 0 && !freeVehicles) {
+        return res.status(409).json({ error: `${inUse.length} vehicle(s) are still assigned here. Move them first.` });
+      }
+      inUse.forEach(v => { v.assignedTo = 'Available for Public Booking'; });
+
+      const deleted = mockClients.splice(idx, 1)[0];
+      return res.json({ message: 'Client removed', client: deleted, freedVehicles: inUse.length });
+    }
+
+    const client = await Client.findById(req.params.id);
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+
+    const inUse = await Vehicle.countDocuments({ assignedTo: client.name });
+    if (inUse > 0 && !freeVehicles) {
+      return res.status(409).json({ error: `${inUse} vehicle(s) are still assigned here. Move them first.` });
+    }
+    if (inUse > 0) {
+      await Vehicle.updateMany({ assignedTo: client.name }, { assignedTo: 'Available for Public Booking' });
+    }
+
+    await client.deleteOne();
+    res.json({ message: 'Client removed', client, freedVehicles: inUse });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

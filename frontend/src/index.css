@@ -6,6 +6,25 @@
   html {
     scroll-behavior: smooth;
   }
+
+  /* Desktop/laptop: render the whole UI at 90% scale. Matches the tighter,
+     more premium proportions of Chrome at 90% zoom — cards, type and spacing
+     all come down together instead of one-off size tweaks.
+     Phones keep their own separately tuned layout. */
+  @media (min-width: 768px) {
+    html {
+      zoom: 0.9;
+    }
+  }
+}
+
+/* Horizontal strips that scroll without showing a bar (admin tabs, action row) */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* Custom Scrollbars */

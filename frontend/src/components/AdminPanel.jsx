@@ -1,19 +1,50 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Bus, Plus, Trash2, Edit2, Landmark, Users, Tag, Clock, MapPin, Eye, FileText, CheckCircle2, LogOut } from 'lucide-react';
+import FleetWorkspace from './FleetWorkspace';
+import ConfirmDialog from './ConfirmDialog';
+import Toasts from './Toasts';
 
 export default function AdminPanel({
-  vehicles, routes, bookings, inquiries,
+  vehicles, routes, bookings, inquiries, clients = [],
   adminUser, onLogout,
   onAddVehicle, onUpdateVehicle, onDeleteVehicle,
+  onAddClient, onDeleteClient,
   onAddRoute, onUpdateRoute, onDeleteRoute,
   onUpdateInquiryStatus
 }) {
-  const [activeTab, setActiveTab] = useState('assignments'); // assignments, vehicles, routes, bookings, contracts
+  const [activeTab, setActiveTab] = useState('fleet'); // fleet, assignments, routes, bookings, contracts
   const [expandedGroup, setExpandedGroup] = useState(null); // Which school/corporate group is expanded
   
   // Modals / Form States
   const [showAddVehicle, setShowAddVehicle] = useState(false);
   const [showAddRoute, setShowAddRoute] = useState(false);
+  const [showClients, setShowClients] = useState(false);
+  const [cName, setCName] = useState('');
+  const [cKind, setCKind] = useState('School');
+  const [cError, setCError] = useState('');
+  const [confirmAction, setConfirmAction] = useState(null); // { title, message, detail, confirmLabel, run }
+  const [formNotice, setFormNotice] = useState(''); // inline validation, never window.alert
+  const [toasts, setToasts] = useState([]);
+
+  const notify = useCallback((title, detail, tone = 'success') => {
+    const id = Date.now() + Math.random();
+    setToasts((list) => [...list.slice(-2), { id, title, detail, tone }]);
+  }, []);
+
+  const dismissToast = useCallback((id) => {
+    setToasts((list) => list.filter((t) => t.id !== id));
+  }, []);
+
+  // Runs a write handler and reports the outcome either way.
+  const runWrite = async (promise, successTitle, successDetail, failTitle) => {
+    const result = await promise;
+    if (result?.ok === false) {
+      notify(failTitle, result.error, 'error');
+      return result;
+    }
+    notify(successTitle, successDetail);
+    return result ?? { ok: true };
+  };
   const [selectedInquiry, setSelectedInquiry] = useState(null);
   
   // Reassignment Form State
@@ -38,13 +69,17 @@ export default function AdminPanel({
   // Booking Filters
   const [bookingVehicleFilter, setBookingVehicleFilter] = useState('All');
 
-  // Constants
+  // Two fixed states plus whatever clients the owner has added. Any vehicle
+  // still on a since-removed client keeps showing up, so nothing gets hidden.
+  const orphaned = vehicles
+    .map(v => v.assignedTo)
+    .filter(a => a && a !== 'Available for Public Booking' && a !== 'Maintenance'
+      && !clients.some(c => c.name === a));
+
   const assignments = [
-    'Baddi International School',
-    'Eicher Parwanoo',
-    'Eicher School',
-    'DAV School',
     'Available for Public Booking',
+    ...clients.map(c => c.name),
+    ...[...new Set(orphaned)],
     'Maintenance'
   ];
 
@@ -55,17 +90,23 @@ export default function AdminPanel({
   const handleAddVehicleSubmit = (e) => {
     e.preventDefault();
     if (!vModel || !vPlate) {
-      alert('Please fill all fields.');
+      setFormNotice('Add a model name and a plate number before saving.');
       return;
     }
-    onAddVehicle({
-      modelName: vModel,
-      plateNumber: vPlate,
-      type: vType,
-      capacity: parseInt(vCapacity),
-      assignedTo: vAssigned,
-      features: ['Air Conditioning', 'CCTV', 'GPS Tracking']
-    });
+    setFormNotice('');
+    runWrite(
+      onAddVehicle({
+        modelName: vModel,
+        plateNumber: vPlate,
+        type: vType,
+        capacity: parseInt(vCapacity),
+        assignedTo: vAssigned,
+        features: ['Air Conditioning', 'CCTV', 'GPS Tracking']
+      }),
+      'Vehicle added to your fleet',
+      `${vPlate.toUpperCase()} · ${vModel} — ${vAssigned}`,
+      'Could not add that vehicle'
+    );
     // Reset
     setVModel('');
     setVPlate('');
@@ -79,18 +120,121 @@ export default function AdminPanel({
     e.preventDefault();
     const vehicleId = rVehicle || (vehicles.find(v => v.assignedTo === 'Available for Public Booking')?._id);
     if (!vehicleId) {
-      alert('You must have at least one vehicle marked "Available for Public Booking" to assign to an intercity route.');
+      setFormNotice('Mark at least one vehicle as “Available for Public Booking” first — an intercity route needs a bus to run on.');
       return;
     }
-    onAddRoute({
-      departure: rFrom,
-      destination: rTo,
-      departureTime: rDepTime,
-      arrivalTime: rArrTime,
-      price: parseInt(rPrice),
-      vehicle: vehicleId
-    });
+    setFormNotice('');
+    runWrite(
+      onAddRoute({
+        departure: rFrom,
+        destination: rTo,
+        departureTime: rDepTime,
+        arrivalTime: rArrTime,
+        price: parseInt(rPrice),
+        vehicle: vehicleId
+      }),
+      'Route scheduled',
+      `${rFrom} → ${rTo} · ${rDepTime} · ₹${rPrice}`,
+      'Could not schedule that route'
+    );
     setShowAddRoute(false);
+  };
+
+  const handleAddClientSubmit = async (e) => {
+    e.preventDefault();
+    setCError('');
+    const name = cName.trim();
+    if (!name) return;
+    const result = await onAddClient({ name, kind: cKind });
+    if (result?.ok) {
+      setCName('');
+      setCKind('School');
+      notify(
+        `${name} added`,
+        `Saved as a ${cKind.toLowerCase()}. You can now assign vehicles to them.`
+      );
+    } else {
+      setCError(result?.error || 'Could not add that client.');
+      notify('Could not add that client', result?.error, 'error');
+    }
+  };
+
+  const handleRemoveClient = (client) => {
+    const inUse = vehicles.filter(v => v.assignedTo === client.name).length;
+    setCError('');
+    setConfirmAction({
+      title: 'Remove this contract?',
+      message: inUse > 0
+        ? `${inUse} vehicle${inUse === 1 ? '' : 's'} still run for them, so this will be refused until you move ${inUse === 1 ? 'it' : 'them'} elsewhere.`
+        : 'They will no longer appear when assigning a vehicle.',
+      detail: { primary: client.name, secondary: `${client.kind} · ${inUse} ${inUse === 1 ? 'vehicle' : 'vehicles'}` },
+      confirmLabel: 'Remove',
+      run: async () => {
+        const result = await onDeleteClient(client._id);
+        if (!result?.ok) {
+          setCError(result?.error || 'Could not remove that client.');
+          notify('Could not remove that contract', result?.error, 'error');
+        } else {
+          notify(`${client.name} removed`, 'They no longer appear when assigning a vehicle.');
+        }
+      },
+    });
+  };
+
+  // Removing a contract from the assignments board. With buses still on it the
+  // wording spells out exactly where they land, and the button says so too —
+  // this is the one action that quietly rewrites other records.
+  const askRemoveContract = (groupName) => {
+    const client = clients.find(c => c.name === groupName);
+    if (!client) return;
+    const onIt = vehicles.filter(v => v.assignedTo === groupName);
+    const count = onIt.length;
+
+    setConfirmAction({
+      title: count === 0 ? 'Remove this contract?' : `Remove contract and free ${count} vehicle${count === 1 ? '' : 's'}?`,
+      message: count === 0
+        ? 'They will no longer appear when assigning a vehicle.'
+        : `${count === 1 ? 'This bus' : `All ${count} buses`} will move to “Available for Public Booking”, where you can reassign ${count === 1 ? 'it' : 'them'}. This can’t be undone.`,
+      detail: {
+        primary: groupName,
+        secondary: count === 0
+          ? `${client.kind} · no vehicles assigned`
+          : onIt.map(v => v.plateNumber).join(', '),
+      },
+      confirmLabel: count === 0 ? 'Remove' : `Free ${count} & remove`,
+      run: async () => {
+        const result = await onDeleteClient(client._id, count > 0);
+        if (!result?.ok) {
+          notify('Could not remove that contract', result?.error, 'error');
+          return;
+        }
+        if (expandedGroup === groupName) setExpandedGroup(null);
+        notify(
+          `${groupName} removed`,
+          count === 0
+            ? 'The contract is no longer listed.'
+            : `${count} vehicle${count === 1 ? '' : 's'} moved to Available for Public Booking.`
+        );
+      },
+    });
+  };
+
+  const askDeleteRoute = (route) => {
+    setConfirmAction({
+      title: 'Delete this route?',
+      message: 'The scheduled service will be removed from the public site. This can’t be undone.',
+      detail: {
+        primary: `${route.departure} → ${route.destination}`,
+        secondary: `${route.departureTime} – ${route.arrivalTime} · ₹${route.price}`,
+      },
+      confirmLabel: 'Delete route',
+      run: () => runWrite(
+        onDeleteRoute(route._id),
+        'Route deleted',
+        `${route.departure} → ${route.destination} is no longer offered.`,
+        'Could not delete that route'
+      ),
+    });
   };
 
   const startReassignment = (vehicle) => {
@@ -99,10 +243,12 @@ export default function AdminPanel({
   };
 
   const saveReassignment = () => {
-    onUpdateVehicle(reassigningVehicle._id, {
-      ...reassigningVehicle,
-      assignedTo: newAssignment
-    });
+    runWrite(
+      onUpdateVehicle(reassigningVehicle._id, { ...reassigningVehicle, assignedTo: newAssignment }),
+      'Vehicle reassigned',
+      `${reassigningVehicle.plateNumber} now runs for ${newAssignment}.`,
+      'Could not reassign that vehicle'
+    );
     setReassigningVehicle(null);
   };
 
@@ -114,111 +260,115 @@ export default function AdminPanel({
   // Vehicles available for routes (only public booking ones)
   const publicVehicles = vehicles.filter(v => v.assignedTo === 'Available for Public Booking');
 
+  const pendingInquiries = inquiries.filter(i => i.status === 'Pending').length;
+
   return (
-    <div className="bg-slate-50 min-h-screen pt-24 pb-10 px-4 sm:px-6 lg:px-8">
+    <div className="bg-slate-50 min-h-screen pt-20 sm:pt-24 pb-6 sm:pb-10 px-3 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
-        
+
         {/* Header Title */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-          <div>
-            <h2 className="text-3xl font-extrabold text-brand-navy tracking-tight font-sans">
-              Owner Administration Dashboard
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 md:gap-4 mb-4 sm:mb-6">
+          <div className="min-w-0">
+            <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-brand-navy tracking-tight font-sans">
+              Owner Dashboard
             </h2>
-            <p className="text-sm font-semibold text-slate-500 mt-1">
+            <p className="hidden sm:block text-sm font-semibold text-slate-500 mt-1">
               Manage routes, track vehicles, and review institutional service contracts.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Actions stay on one line at every width — they scroll sideways on
+              a phone rather than stacking into a wall of buttons. */}
+          <div className="flex w-full md:w-auto items-center gap-2 overflow-x-auto no-scrollbar -mx-3 px-3 md:mx-0 md:px-0">
             <button
               onClick={() => {
                 // Auto-set the first available vehicle
                 if (publicVehicles.length > 0) setRVehicle(publicVehicles[0]._id);
                 setShowAddRoute(true);
               }}
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-brand-steel hover:bg-brand-navy text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+              className="shrink-0 flex items-center gap-1.5 px-3 sm:px-4 py-2.5 bg-brand-steel hover:bg-brand-navy text-white text-xs font-bold rounded-xl transition-all shadow-sm"
             >
               <Plus size={16} />
-              <span>Add New Route</span>
+              <span className="sm:hidden">Route</span>
+              <span className="hidden sm:inline">Add New Route</span>
             </button>
             <button
               onClick={() => setShowAddVehicle(true)}
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-brand-navy hover:bg-brand-steel text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+              className="shrink-0 flex items-center gap-1.5 px-3 sm:px-4 py-2.5 bg-brand-navy hover:bg-brand-steel text-white text-xs font-bold rounded-xl transition-all shadow-sm"
             >
               <Plus size={16} />
-              <span>Add Vehicle</span>
+              <span className="sm:hidden">Vehicle</span>
+              <span className="hidden sm:inline">Add Vehicle</span>
+            </button>
+            <button
+              onClick={() => { setShowClients(true); setCError(''); }}
+              className="shrink-0 flex items-center gap-1.5 px-3 sm:px-4 py-2.5 bg-brand-navy hover:bg-brand-steel text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+            >
+              <Plus size={16} />
+              <span className="sm:hidden">School</span>
+              <span className="hidden sm:inline">Add School / Company</span>
             </button>
 
             {/* Signed-in admin + logout */}
-            <div className="flex items-center gap-2 pl-2 ml-1 border-l border-slate-200">
+            <div className="shrink-0 flex items-center gap-2 pl-2 ml-auto md:ml-1 border-l border-slate-200">
               {adminUser?.email && (
-                <span className="hidden sm:inline text-[11px] font-bold text-slate-500 max-w-[180px] truncate" title={adminUser.email}>
+                <span className="hidden lg:inline text-[11px] font-bold text-slate-500 max-w-[180px] truncate" title={adminUser.email}>
                   {adminUser.email}
                 </span>
               )}
               <button
                 onClick={onLogout}
-                className="flex items-center gap-1.5 px-4 py-2.5 bg-white hover:bg-red-50 text-red-600 border border-red-200 text-xs font-bold rounded-xl transition-all shadow-sm"
+                aria-label="Sign out"
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2.5 bg-white hover:bg-red-50 text-red-600 border border-red-200 text-xs font-bold rounded-xl transition-all shadow-sm"
               >
                 <LogOut size={15} />
-                <span>Sign out</span>
+                <span className="hidden sm:inline">Sign out</span>
               </button>
             </div>
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex flex-wrap border-b border-slate-200 mb-8 gap-2 bg-white p-2 rounded-2xl shadow-sm border">
-          <button
-            onClick={() => setActiveTab('assignments')}
-            className={`px-5 py-3 rounded-xl text-sm font-bold transition-all ${
-              activeTab === 'assignments' 
-                ? 'bg-brand-navy text-white' 
-                : 'text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            Fleet Assignments Grid
-          </button>
-          <button
-            onClick={() => setActiveTab('vehicles')}
-            className={`px-5 py-3 rounded-xl text-sm font-bold transition-all ${
-              activeTab === 'vehicles' 
-                ? 'bg-brand-navy text-white' 
-                : 'text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            Vehicle Directory
-          </button>
-          <button
-            onClick={() => setActiveTab('routes')}
-            className={`px-5 py-3 rounded-xl text-sm font-bold transition-all ${
-              activeTab === 'routes' 
-                ? 'bg-brand-navy text-white' 
-                : 'text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            Route Manager
-          </button>
-          <button
-            onClick={() => setActiveTab('bookings')}
-            className={`px-5 py-3 rounded-xl text-sm font-bold transition-all ${
-              activeTab === 'bookings' 
-                ? 'bg-brand-navy text-white' 
-                : 'text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            Seat Bookings
-          </button>
-          <button
-            onClick={() => setActiveTab('contracts')}
-            className={`px-5 py-3 rounded-xl text-sm font-bold transition-all ${
-              activeTab === 'contracts' 
-                ? 'bg-brand-navy text-white' 
-                : 'text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            Contract Inquiries ({inquiries.filter(i => i.status === 'Pending').length} New)
-          </button>
+        {/* Navigation tabs — a single scrollable strip so they never stack into
+            rows on a phone. Short labels below sm, full labels above. */}
+        <div className="flex mb-4 sm:mb-6 gap-1.5 sm:gap-2 bg-white p-1.5 sm:p-2 rounded-2xl shadow-sm border border-slate-200 overflow-x-auto no-scrollbar">
+          {[
+            { id: 'fleet', short: 'Fleet', full: 'My Fleet' },
+            { id: 'assignments', short: 'Schools', full: 'Assignments by School' },
+            { id: 'routes', short: 'Routes', full: 'Route Manager' },
+            { id: 'bookings', short: 'Bookings', full: 'Seat Bookings' },
+            {
+              id: 'contracts',
+              short: `Inquiries${pendingInquiries ? ` (${pendingInquiries})` : ''}`,
+              full: `Contract Inquiries (${pendingInquiries} New)`,
+            },
+          ].map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`shrink-0 whitespace-nowrap px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                activeTab === t.id
+                  ? 'bg-brand-navy text-white'
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <span className="sm:hidden">{t.short}</span>
+              <span className="hidden sm:inline">{t.full}</span>
+            </button>
+          ))}
         </div>
+
+        {/* ------------------ TAB CONTENT: MY FLEET (search → full picture) ------------------ */}
+        {activeTab === 'fleet' && (
+          <FleetWorkspace
+            vehicles={vehicles}
+            routes={routes}
+            bookings={bookings}
+            assignments={assignments}
+            notify={notify}
+            onAddVehicle={onAddVehicle}
+            onUpdateVehicle={onUpdateVehicle}
+            onDeleteVehicle={onDeleteVehicle}
+          />
+        )}
 
         {/* ------------------ TAB CONTENT: FLEET ASSIGNMENTS GRID ------------------ */}
         {activeTab === 'assignments' && (
@@ -257,9 +407,23 @@ export default function AdminPanel({
                           </span>
                         </div>
                       </div>
-                      <span className="text-xs font-bold text-brand-steel hover:underline">
-                        {isExpanded ? 'Collapse' : 'Click to View'}
-                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-xs font-bold text-brand-steel hover:underline">
+                          {isExpanded ? 'Collapse' : 'Click to View'}
+                        </span>
+                        {/* Only real contracts can be removed — the two fixed
+                            states aren't clients. */}
+                        {clients.some(c => c.name === group) && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); askRemoveContract(group); }}
+                            title={`Remove ${group}`}
+                            aria-label={`Remove ${group}`}
+                            className="ml-1 p-2 rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-600 transition-colors"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {/* Group Expanded list */}
@@ -268,7 +432,30 @@ export default function AdminPanel({
                         {groupVehicles.length === 0 ? (
                           <p className="text-slate-400 font-bold text-sm text-center py-6">No vehicles currently assigned here.</p>
                         ) : (
-                          <div className="overflow-x-auto">
+                          <>
+                          {/* Phone: cards instead of a table inside the group */}
+                          <ul className="sm:hidden space-y-2">
+                            {groupVehicles.map(vehicle => (
+                              <li key={vehicle._id} className="rounded-xl bg-white border border-slate-100 p-3">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className="font-mono text-sm font-bold text-brand-navy">{vehicle.plateNumber}</p>
+                                    <p className="text-[11px] font-semibold text-slate-500 truncate">
+                                      {vehicle.modelName} · {vehicle.capacity} seats
+                                    </p>
+                                  </div>
+                                  <button
+                                    onClick={() => startReassignment(vehicle)}
+                                    className="shrink-0 px-3 py-1.5 bg-brand-steel/10 hover:bg-brand-steel text-brand-steel hover:text-white rounded-lg text-[11px] font-bold transition-all"
+                                  >
+                                    Reassign
+                                  </button>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+
+                          <div className="hidden sm:block overflow-x-auto">
                             <table className="w-full text-left text-sm border-collapse">
                               <thead>
                                 <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-xs">
@@ -299,6 +486,7 @@ export default function AdminPanel({
                               </tbody>
                             </table>
                           </div>
+                          </>
                         )}
                       </div>
                     )}
@@ -309,67 +497,48 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* ------------------ TAB CONTENT: VEHICLE DIRECTORY ------------------ */}
-        {activeTab === 'vehicles' && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-              <h3 className="font-bold text-lg text-brand-navy">Registered Fleet</h3>
-              <span className="text-xs font-bold text-slate-500 uppercase">{vehicles.length} Total Vehicles</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-xs">
-                    <th className="p-4">Plate Number</th>
-                    <th className="p-4">Model Name</th>
-                    <th className="p-4">Type</th>
-                    <th className="p-4">Capacity</th>
-                    <th className="p-4">Current Deployment</th>
-                    <th className="p-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-semibold text-slate-600">
-                  {vehicles.map(vehicle => (
-                    <tr key={vehicle._id} className="hover:bg-slate-50">
-                      <td className="p-4 font-mono text-brand-navy font-bold">{vehicle.plateNumber}</td>
-                      <td className="p-4 text-slate-800">{vehicle.modelName}</td>
-                      <td className="p-4">{vehicle.type}</td>
-                      <td className="p-4">{vehicle.capacity} Seats</td>
-                      <td className="p-4">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
-                          vehicle.assignedTo === 'Available for Public Booking'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : vehicle.assignedTo === 'Maintenance'
-                            ? 'bg-rose-50 text-rose-700 border-rose-200'
-                            : 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                        }`}>
-                          {vehicle.assignedTo}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right">
-                        <button
-                          onClick={() => onDeleteVehicle(vehicle._id)}
-                          className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors inline-flex"
-                          title="Delete Vehicle"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
         {/* ------------------ TAB CONTENT: ROUTE MANAGER ------------------ */}
         {activeTab === 'routes' && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-slate-100">
-              <h3 className="font-bold text-lg text-brand-navy">Active Intercity Routes</h3>
+            <div className="p-4 sm:p-6 border-b border-slate-100">
+              <h3 className="font-bold text-base sm:text-lg text-brand-navy">Active Intercity Routes</h3>
             </div>
-            <div className="overflow-x-auto">
+
+            {/* Phone: one card per route instead of a table you must drag sideways */}
+            <ul className="sm:hidden divide-y divide-slate-100">
+              {routes.length === 0 && (
+                <li className="p-4 text-sm font-semibold text-slate-500">No routes yet.</li>
+              )}
+              {routes.map(route => (
+                <li key={route._id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-800 text-sm">{route.departure} ➔ {route.destination}</p>
+                      <p className="text-xs font-semibold text-slate-500 mt-0.5">
+                        {route.departureTime} – {route.arrivalTime}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-sm font-extrabold text-brand-steel">₹{route.price}</span>
+                      <button
+                        onClick={() => askDeleteRoute(route)}
+                        aria-label="Delete route"
+                        className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold text-slate-500">
+                    <span className="font-mono font-bold text-slate-700">{route.vehicle?.plateNumber || 'No bus'}</span>
+                    <span className="text-slate-300">·</span>
+                    <span className="truncate">{route.vehicle?.modelName || 'No bus assigned'}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-xs">
@@ -391,7 +560,7 @@ export default function AdminPanel({
                       <td className="p-4 font-mono font-bold text-slate-700">{route.vehicle?.plateNumber || 'N/A'}</td>
                       <td className="p-4 text-right">
                         <button
-                          onClick={() => onDeleteRoute(route._id)}
+                          onClick={() => askDeleteRoute(route)}
                           className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors inline-flex"
                         >
                           <Trash2 size={16} />
@@ -410,10 +579,10 @@ export default function AdminPanel({
           <div className="space-y-6">
             
             {/* Filter Selection Panel */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div>
-                <h4 className="font-bold text-brand-navy">Passenger Manifest Filter</h4>
-                <p className="text-xs font-semibold text-slate-400 mt-0.5">Select a specific vehicle plate number to see its travelers.</p>
+                <h4 className="font-bold text-brand-navy text-sm sm:text-base">Passenger Manifest Filter</h4>
+                <p className="hidden sm:block text-xs font-semibold text-slate-400 mt-0.5">Select a specific vehicle plate number to see its travelers.</p>
               </div>
               <div className="w-full sm:w-64">
                 <select
@@ -433,7 +602,36 @@ export default function AdminPanel({
 
             {/* Bookings Table */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
+              {/* Phone: each booking as a card */}
+              <ul className="sm:hidden divide-y divide-slate-100">
+                {filteredBookings.length === 0 && (
+                  <li className="p-6 text-center text-sm font-bold text-slate-400">
+                    No passenger bookings recorded for this vehicle.
+                  </li>
+                )}
+                {filteredBookings.map(b => (
+                  <li key={b._id} className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-800 text-sm truncate">{b.passengerName}</p>
+                        <p className="text-[11px] font-semibold text-slate-400 truncate">{b.passengerPhone}</p>
+                      </div>
+                      <span className="shrink-0 text-sm font-extrabold text-slate-800">₹{b.amountPaid}</span>
+                    </div>
+                    <p className="mt-2 text-xs font-bold text-slate-700">
+                      {b.route?.departure} ➔ {b.route?.destination}
+                    </p>
+                    <p className="text-[11px] font-semibold text-slate-400">{b.date} | {b.route?.departureTime}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold">
+                      <span className="font-mono font-bold text-brand-navy">{b.route?.vehicle?.plateNumber || 'N/A'}</span>
+                      <span className="font-mono font-bold text-brand-steel">Seat {b.seatNumbers.join(', ')}</span>
+                      <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] rounded border border-emerald-100 uppercase font-bold">Paid</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-xs">
@@ -484,10 +682,43 @@ export default function AdminPanel({
         {/* ------------------ TAB CONTENT: CONTRACT INQUIRIES ------------------ */}
         {activeTab === 'contracts' && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-slate-100">
-              <h3 className="font-bold text-lg text-brand-navy">Institutional Contract Inquiries</h3>
+            <div className="p-4 sm:p-6 border-b border-slate-100">
+              <h3 className="font-bold text-base sm:text-lg text-brand-navy">Institutional Contract Inquiries</h3>
             </div>
-            <div className="overflow-x-auto">
+
+            {/* Six columns don't fit a tablet either, so cards run up to lg */}
+            <ul className="lg:hidden divide-y divide-slate-100">
+              {inquiries.length === 0 && (
+                <li className="p-6 text-center text-sm font-bold text-slate-400">No inquiries yet.</li>
+              )}
+              {inquiries.map(inq => (
+                <li key={inq._id}>
+                  <button onClick={() => setSelectedInquiry(inq)} className="w-full p-4 text-left active:bg-slate-50">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="min-w-0 font-bold text-slate-800 text-sm truncate">{inq.orgName}</p>
+                      <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        inq.status === 'Approved'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : inq.status === 'Pending'
+                          ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                          : 'bg-slate-100 text-slate-600 border-slate-200'
+                      }`}>
+                        {inq.status}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                      {inq.contactPerson} · {inq.phone}
+                    </p>
+                    <p className="mt-1.5 text-[11px] font-bold text-brand-steel">
+                      {inq.requiredFleetSize} × {inq.vehicleType}
+                    </p>
+                    <p className="mt-0.5 text-[11px] font-semibold text-slate-400 truncate">{inq.routeDescription}</p>
+                  </button>
+                </li>
+              ))}
+            </ul>
+
+            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-xs">
@@ -540,11 +771,119 @@ export default function AdminPanel({
       </div>
 
       {/* ------------------ MODAL: ADD VEHICLE ------------------ */}
+      {/* ---------- Schools & companies under contract ---------- */}
+      {showClients && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full border shadow-xl animate-fade-in">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="font-extrabold text-xl text-brand-navy">Schools &amp; companies</h3>
+                <p className="text-xs font-semibold text-slate-500 mt-1">
+                  Add the organisations you hold contracts with. They become available when assigning a vehicle.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowClients(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 shrink-0"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddClientSubmit} className="mt-5 space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Name</label>
+                <input
+                  type="text"
+                  value={cName}
+                  onChange={(e) => setCName(e.target.value)}
+                  placeholder="e.g. International Public School"
+                  aria-label="New client name"
+                  className="w-full p-2.5 border border-slate-200 rounded-xl font-medium"
+                  required
+                />
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Type</label>
+                  <select
+                    value={cKind}
+                    onChange={(e) => setCKind(e.target.value)}
+                    aria-label="Client type"
+                    className="w-full p-2.5 border border-slate-200 rounded-xl font-bold text-slate-700"
+                  >
+                    <option value="School">School</option>
+                    <option value="Company">Company</option>
+                  </select>
+                </div>
+                <button
+                  type="submit"
+                  className="self-end px-6 py-2.5 bg-brand-navy hover:bg-brand-steel text-white text-xs font-bold rounded-xl transition-all"
+                >
+                  Add
+                </button>
+              </div>
+            </form>
+
+            {cError && (
+              <p className="mt-3 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold leading-relaxed">
+                {cError}
+              </p>
+            )}
+
+            <div className="mt-5 border-t border-slate-100 pt-4">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                Current contracts ({clients.length})
+              </p>
+              {clients.length === 0 ? (
+                <p className="text-xs text-slate-500 font-semibold py-2">No schools or companies added yet.</p>
+              ) : (
+                <ul className="space-y-1 max-h-56 overflow-y-auto">
+                  {clients.map((c) => {
+                    const inUse = vehicles.filter((v) => v.assignedTo === c.name).length;
+                    return (
+                      <li key={c._id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2">
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs font-bold text-slate-700">{c.name}</span>
+                          <span className="text-[10px] font-semibold text-slate-400">
+                            {c.kind} · {inUse} {inUse === 1 ? 'vehicle' : 'vehicles'}
+                          </span>
+                        </span>
+                        <button
+                          onClick={() => handleRemoveClient(c)}
+                          title={inUse > 0 ? 'Move its vehicles first' : 'Remove'}
+                          className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-600 transition-colors"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            <button
+              onClick={() => setShowClients(false)}
+              className="mt-5 w-full py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
       {showAddVehicle && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4">
           <form onSubmit={handleAddVehicleSubmit} className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full border shadow-xl animate-fade-in space-y-4">
             <h3 className="font-extrabold text-xl text-brand-navy">Add New Fleet Vehicle</h3>
-            
+            {formNotice && (
+              <p className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold leading-relaxed">
+                {formNotice}
+              </p>
+            )}
+
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Model Name</label>
               <input
@@ -633,7 +972,12 @@ export default function AdminPanel({
         <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4">
           <form onSubmit={handleAddRouteSubmit} className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full border shadow-xl animate-fade-in space-y-4">
             <h3 className="font-extrabold text-xl text-brand-navy">Schedule New Intercity Route</h3>
-            
+            {formNotice && (
+              <p className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold leading-relaxed">
+                {formNotice}
+              </p>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">From</label>
@@ -860,6 +1204,22 @@ export default function AdminPanel({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!confirmAction}
+        title={confirmAction?.title}
+        message={confirmAction?.message}
+        detail={confirmAction?.detail}
+        confirmLabel={confirmAction?.confirmLabel}
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => {
+          const action = confirmAction;
+          setConfirmAction(null);
+          action?.run?.();
+        }}
+      />
+
+      <Toasts toasts={toasts} onDismiss={dismissToast} />
 
     </div>
   );

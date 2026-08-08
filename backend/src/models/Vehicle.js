@@ -22,17 +22,12 @@ const vehicleSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  // Either one of the two fixed states below, or the name of a Client the
+  // owner has added. Not an enum — clients are data, not code.
   assignedTo: {
     type: String,
     required: true,
-    enum: [
-      'Available for Public Booking',
-      'Baddi International School',
-      'Eicher Parwanoo',
-      'Eicher School',
-      'DAV School',
-      'Maintenance'
-    ],
+    trim: true,
     default: 'Available for Public Booking'
   },
   features: {
