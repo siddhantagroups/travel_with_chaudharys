@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Bus, Plus, Trash2, Edit2, Landmark, Users, Tag, Clock, MapPin, Eye, FileText, CheckCircle2, LogOut } from 'lucide-react';
+import { Bus, Plus, Trash2, Edit2, Landmark, Users, Tag, Clock, MapPin, Eye, FileText, CheckCircle2, LogOut, Settings } from 'lucide-react';
 import FleetWorkspace from './FleetWorkspace';
 import ConfirmDialog from './ConfirmDialog';
 import Toasts from './Toasts';
@@ -10,9 +10,10 @@ export default function AdminPanel({
   onAddVehicle, onUpdateVehicle, onDeleteVehicle,
   onAddClient, onDeleteClient,
   onAddRoute, onUpdateRoute, onDeleteRoute,
-  onUpdateInquiryStatus
+  onUpdateInquiryStatus,
+  serviceConfig, onUpdateServiceConfig
 }) {
-  const [activeTab, setActiveTab] = useState('fleet'); // fleet, assignments, routes, bookings, contracts
+  const [activeTab, setActiveTab] = useState('fleet'); // fleet, assignments, routes, bookings, contracts, settings
   const [expandedGroup, setExpandedGroup] = useState(null); // Which school/corporate group is expanded
   
   // Modals / Form States
@@ -307,6 +308,16 @@ export default function AdminPanel({
               <span className="sm:hidden">School</span>
               <span className="hidden sm:inline">Add School / Company</span>
             </button>
+            {/* Not an "add" action, so it reads as a neutral control rather than
+                sharing the solid navy of the create buttons beside it. */}
+            <button
+              onClick={() => setActiveTab('settings')}
+              className="shrink-0 flex items-center gap-1.5 px-3 sm:px-4 py-2.5 bg-white hover:bg-slate-50 text-brand-navy border border-slate-200 text-xs font-bold rounded-xl transition-all shadow-sm"
+            >
+              <Settings size={16} />
+              <span className="sm:hidden">Settings</span>
+              <span className="hidden sm:inline">Site Settings</span>
+            </button>
 
             {/* Signed-in admin + logout */}
             <div className="shrink-0 flex items-center gap-2 pl-2 ml-auto md:ml-1 border-l border-slate-200">
@@ -340,6 +351,9 @@ export default function AdminPanel({
               short: `Inquiries${pendingInquiries ? ` (${pendingInquiries})` : ''}`,
               full: `Contract Inquiries (${pendingInquiries} New)`,
             },
+            // Site Settings is reached from the header action row instead of
+            // getting a tab here — it configures the site rather than being
+            // another view of fleet data.
           ].map((t) => (
             <button
               key={t.id}
@@ -764,6 +778,64 @@ export default function AdminPanel({
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* ------------------ TAB CONTENT: SITE SETTINGS ------------------ */}
+        {activeTab === 'settings' && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 sm:p-6 border-b border-slate-100">
+              <h3 className="font-bold text-base sm:text-lg text-brand-navy">Service Availability</h3>
+              <p className="text-xs text-slate-500 font-semibold mt-1">Toggle booking services on or off. When off, visitors see your custom message instead of the booking form.</p>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {[
+                { id: 'buses', label: 'Bus Booking' },
+                { id: 'cabs', label: 'Cab Booking' },
+                { id: 'traveler', label: 'Traveller Booking' },
+              ].map((svc) => {
+                const cfg = serviceConfig?.[svc.id] || { enabled: true, message: '' };
+                return (
+                  <div key={svc.id} className="p-4 sm:p-6">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="font-bold text-sm text-slate-800">{svc.label}</p>
+                        <p className="text-[11px] font-semibold text-slate-400 mt-0.5">
+                          {cfg.enabled ? 'Visible to visitors — booking form is active' : 'Hidden — visitors see unavailability message'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onUpdateServiceConfig({
+                            [svc.id]: { enabled: !cfg.enabled, message: cfg.message }
+                          });
+                        }}
+                        className={`relative w-12 h-7 rounded-full transition-colors duration-200 shrink-0 ${cfg.enabled ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                      >
+                        <span className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${cfg.enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                      </button>
+                    </div>
+                    {!cfg.enabled && (
+                      <div className="mt-3">
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Message shown to visitors</label>
+                        <textarea
+                          value={cfg.message}
+                          onChange={(e) => {
+                            onUpdateServiceConfig({
+                              [svc.id]: { enabled: cfg.enabled, message: e.target.value }
+                            });
+                          }}
+                          rows={2}
+                          className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:border-brand-steel resize-none"
+                          placeholder="e.g. Bus booking will resume next week."
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

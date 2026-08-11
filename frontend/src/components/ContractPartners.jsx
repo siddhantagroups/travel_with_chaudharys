@@ -29,6 +29,14 @@ export default function ContractPartners() {
     }
   ];
 
+  const fleetImages = [
+    { src: "/fleet-1.jpg", alt: "Shemford Public School Pinjore — dedicated fleet of school buses" },
+    { src: "/fleet-2.jpg", alt: "Shemford Public School bus — close-up" },
+    { src: "/fleet-3.jpg", alt: "Eicher School bus on route in Parwanoo" },
+    { src: "/fleet-4.jpg", alt: "School bus fleet lined up and ready for dispatch" },
+    { src: "/fleet-5.jpg", alt: "Chitkara University — full fleet of campus transport buses" },
+  ];
+
   const stats = [
     { value: "50+", label: "Active Routes Daily" },
     { value: "5,000+", label: "Commuters Daily" },
@@ -86,6 +94,53 @@ export default function ContractPartners() {
               <p className="text-slate-500 text-[11px] sm:text-[13px] leading-snug">{partner.desc}</p>
             </div>
           ))}
+        </div>
+
+        {/* Fleet Gallery — social proof */}
+        <div className="mb-6 sm:mb-8">
+          <div className="flex items-center gap-3 mb-3 sm:mb-4">
+            <span className="h-px flex-1 bg-slate-200"></span>
+            <span className="text-[9px] sm:text-[10px] font-bold tracking-[0.2em] uppercase text-slate-400">Our Fleet in Action</span>
+            <span className="h-px flex-1 bg-slate-200"></span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-2 gap-2 sm:gap-2.5">
+            {fleetImages.slice(0, 2).map((img, idx) => (
+              <div
+                key={idx}
+                className="relative overflow-hidden rounded-xl sm:rounded-lg group shadow-md shadow-slate-900/10"
+              >
+                <div className="aspect-[16/10] sm:aspect-[16/9]">
+                  <img
+                    src={img.src}
+                    alt={img.alt}
+                    loading="lazy"
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                  />
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-t from-brand-navy/50 via-brand-navy/5 to-transparent"></div>
+                <div className="absolute inset-0 bg-brand-navy/10 group-hover:bg-transparent transition-colors duration-500"></div>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-2.5 mt-2 sm:mt-2.5">
+            {fleetImages.slice(2, 5).map((img, idx) => (
+              <div
+                key={idx}
+                className={`relative overflow-hidden rounded-xl sm:rounded-lg group shadow-md shadow-slate-900/10 ${idx === 2 ? 'col-span-2 sm:col-span-1' : ''}`}
+              >
+                <div className="aspect-[16/10] sm:aspect-[16/9]">
+                  <img
+                    src={img.src}
+                    alt={img.alt}
+                    loading="lazy"
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                  />
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-t from-brand-navy/50 via-brand-navy/5 to-transparent"></div>
+                <div className="absolute inset-0 bg-brand-navy/10 group-hover:bg-transparent transition-colors duration-500"></div>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Statistics Banner */}

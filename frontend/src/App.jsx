@@ -116,6 +116,8 @@ export default function App() {
   const [showPayment, setShowPayment] = useState(false);
   const [activeBookingRef, setActiveBookingRef] = useState(null);
   const [showTicketReceipt, setShowTicketReceipt] = useState(null);
+  const [inquiryVehicle, setInquiryVehicle] = useState(null);
+  const [serviceConfig, setServiceConfig] = useState(null);
 
   // --- HIDDEN ADMIN ACCESS ---
   // There is intentionally NO public admin button. The admin panel is only reachable
@@ -169,7 +171,7 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Fetch public data on mount + restore any existing admin session
+  // Fetch public data on mount + restore any existing admin session.
   useEffect(() => {
     fetchPublicData();
     restoreSession();
@@ -190,12 +192,19 @@ export default function App() {
   // Public data — no auth required.
   const fetchPublicData = async () => {
     try {
-      const vRes = await fetch(`${API_BASE}/vehicles`);
-      const rRes = await fetch(`${API_BASE}/routes`);
-      const cRes = await fetch(`${API_BASE}/clients`);
+      const [vRes, rRes, cRes, sRes] = await Promise.all([
+        fetch(`${API_BASE}/vehicles`),
+        fetch(`${API_BASE}/routes`),
+        fetch(`${API_BASE}/clients`),
+        fetch(`${API_BASE}/settings`),
+      ]);
       if (vRes.ok) setVehicles(await vRes.json());
       if (rRes.ok) setRoutes(await rRes.json());
       if (cRes.ok) setClients(await cRes.json());
+      if (sRes.ok) {
+        const settings = await sRes.json();
+        if (settings.services) setServiceConfig(settings.services);
+      }
     } catch (err) {
       console.error('Error fetching public data:', err);
     }
@@ -489,13 +498,18 @@ export default function App() {
     }
   };
 
-  // Custom fleet booking inquiry
   const handleRentFleetInquiry = (vehicle) => {
-    // Scroll to booking, set tab to contract, and autofill notes
-    setView('public');
-    const el = document.getElementById('booking');
-    if (el) el.scrollIntoView({ behavior: 'smooth' });
-    alert(`To inquire about renting "${vehicle.modelName}" (${vehicle.plateNumber}), please fill out the 'Institutional Fleet Contracts' form. We will contact you immediately.`);
+    setInquiryVehicle(vehicle);
+  };
+
+  const handleInquiryProceed = () => {
+    if (!inquiryVehicle) return;
+    setInquiryVehicle(null);
+    setActiveService('contracts');
+    setTimeout(() => {
+      const el = document.getElementById('booking');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }, 80);
   };
 
   // --- ADMIN HANDLERS (all require a valid session token via authFetch) ---
@@ -734,6 +748,23 @@ export default function App() {
             onUpdateRoute={handleUpdateRoute}
             onDeleteRoute={handleDeleteRoute}
             onUpdateInquiryStatus={handleUpdateInquiryStatus}
+            serviceConfig={serviceConfig}
+            onUpdateServiceConfig={async (newConfig) => {
+              try {
+                const token = localStorage.getItem('twc_admin_token');
+                const res = await fetch(`${API_BASE}/settings`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                  body: JSON.stringify({ services: newConfig })
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  setServiceConfig(data.services);
+                }
+              } catch (err) {
+                console.error('Failed to update service config:', err);
+              }
+            }}
           />
         ) : (
           <AdminLogin
@@ -753,6 +784,7 @@ export default function App() {
               onContractSubmit={handleContractInquirySubmit}
               activeService={activeService}
               setActiveService={setActiveService}
+              serviceConfig={serviceConfig}
             />
           )}
 
@@ -1171,6 +1203,54 @@ export default function App() {
           onClose={() => setShowPayment(false)}
           onPaymentSuccess={handlePaymentSuccess}
         />
+      )}
+
+      {/* Fleet Inquiry Modal */}
+      {inquiryVehicle && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setInquiryVehicle(null); }}
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-fade-in">
+            <div className="h-40 w-full bg-slate-200 relative overflow-hidden">
+              <img
+                src={getVehicleImage(inquiryVehicle.type)}
+                alt={inquiryVehicle.modelName}
+                className="h-full w-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-brand-navy/80 via-brand-navy/20 to-transparent" />
+              <div className="absolute bottom-3 left-4 text-white">
+                <p className="text-lg font-extrabold leading-snug">{inquiryVehicle.modelName}</p>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-white/80 mt-0.5">{inquiryVehicle.plateNumber}</p>
+              </div>
+            </div>
+
+            <div className="p-5">
+              <div className="flex items-center gap-3 rounded-xl bg-sky-50 border border-sky-200/60 px-3.5 py-3">
+                <Info size={18} className="text-brand-steel shrink-0" />
+                <p className="text-[13px] font-semibold text-brand-navy leading-snug">
+                  Fill out the <span className="font-extrabold">Fleet Contracts</span> form and our team will reach out to you within the hour.
+                </p>
+              </div>
+
+              <div className="flex gap-2 mt-5">
+                <button
+                  onClick={() => setInquiryVehicle(null)}
+                  className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleInquiryProceed}
+                  className="flex-1 rounded-xl bg-brand-navy py-2.5 text-xs font-bold text-white transition-colors hover:bg-brand-steel flex items-center justify-center gap-1.5"
+                >
+                  <Calendar size={14} />
+                  Fill Inquiry Form
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Footer — the admin area is a workspace, not a public page */}

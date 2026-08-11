@@ -27,7 +27,7 @@ const VanIcon = ({ size = 18, className }) => (
 
 let heroVideoPlayedThisVisit = false;
 
-export default function HeroBooking({ routes, onSearch, onContractSubmit, activeService, setActiveService }) {
+export default function HeroBooking({ routes, onSearch, onContractSubmit, activeService, setActiveService, serviceConfig }) {
   const [bookingType, setBookingType] = useState('oneway');
 
   const [from, setFrom] = useState('Pinjor');
@@ -57,31 +57,28 @@ export default function HeroBooking({ routes, onSearch, onContractSubmit, active
   const [contractSubmitted, setContractSubmitted] = useState(false);
 
   const videoRef = useRef(null);
-  const [playHeroVideo, setPlayHeroVideo] = useState(false);
-
-  useEffect(() => {
-    if (!heroVideoPlayedThisVisit) setPlayHeroVideo(true);
-  }, []);
 
   const handleHeroVideoPlaying = () => { heroVideoPlayedThisVisit = true; };
   const handleHeroVideoEnded = () => { heroVideoPlayedThisVisit = true; };
-  const handleHeroVideoError = () => {
-    heroVideoPlayedThisVisit = true;
-    setPlayHeroVideo(false);
+
+  const isServiceEnabled = (id) => {
+    if (id === 'contracts') return true;
+    if (!serviceConfig || !serviceConfig[id]) return true;
+    return serviceConfig[id].enabled;
+  };
+  const getServiceMessage = (id) => {
+    if (!serviceConfig || !serviceConfig[id]) return '';
+    return serviceConfig[id].message || '';
   };
 
   const services = [
-    { id: 'buses', label: 'Buses', icon: <Bus size={18} />, enabled: true },
-    { id: 'cabs', label: 'Cabs', icon: <Car size={18} />, enabled: true },
-    { id: 'traveler', label: 'Traveler', icon: <VanIcon size={18} />, enabled: true },
-    { id: 'contracts', label: 'Fleet Contracts', icon: <ShieldCheck size={18} />, enabled: true }
+    { id: 'buses', label: 'Buses', icon: <Bus size={18} /> },
+    { id: 'cabs', label: 'Cabs', icon: <Car size={18} /> },
+    { id: 'traveler', label: 'Traveler', icon: <VanIcon size={18} /> },
+    { id: 'contracts', label: 'Fleet Contracts', icon: <ShieldCheck size={18} /> }
   ];
 
   const handleServiceClick = (service) => {
-    if (!service.enabled) {
-      alert(`${service.label} bookings via Travel With Chaudharys partnerships are coming soon! Try 'Buses', 'Cabs', or 'Fleet Contracts'.`);
-      return;
-    }
     setActiveService(service.id);
     setShowMoreFields(false);
   };
@@ -237,30 +234,20 @@ export default function HeroBooking({ routes, onSearch, onContractSubmit, active
           the video to the box height, so if this tracked the hero it would zoom
           in whenever the form expands. Pinning it keeps the framing still. */}
       <div className="absolute inset-x-0 top-0 h-[540px] sm:h-full" aria-hidden="true">
-        {/* Base layer: static hero image */}
-        <div
-          className="hero-shift absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: "url('/hero.jpeg')" }}
-        ></div>
-
-        {/* Intro video — always full background */}
-        {playHeroVideo && (
-          <video
-            ref={videoRef}
-            className="hero-shift absolute inset-0 w-full h-full object-cover hero-video"
-            src="/hero.mp4"
-            poster="/hero.jpeg"
-            autoPlay
-            muted
-            playsInline
-            preload="auto"
-            onPlaying={handleHeroVideoPlaying}
-            onEnded={handleHeroVideoEnded}
-            onError={handleHeroVideoError}
-            tabIndex={-1}
-            disablePictureInPicture
-          />
-        )}
+        <video
+          ref={videoRef}
+          className="hero-shift absolute inset-0 w-full h-full object-cover hero-video"
+          src="/hero.mp4"
+          autoPlay
+          muted
+          playsInline
+          preload="auto"
+          poster="/hero.jpeg"
+          onPlaying={handleHeroVideoPlaying}
+          onEnded={handleHeroVideoEnded}
+          tabIndex={-1}
+          disablePictureInPicture
+        />
 
         {/* Softens the media's lower edge into the hero background once the
             form is expanded and the hero is taller than this box. */}
@@ -323,7 +310,30 @@ export default function HeroBooking({ routes, onSearch, onContractSubmit, active
 
         {/* Booking Card */}
         <div data-booking-card className={`relative w-[85%] sm:w-[78%] lg:w-[88%] xl:w-full mx-auto bg-white/95 sm:bg-white backdrop-blur-sm sm:backdrop-blur-none rounded-xl sm:rounded-2xl shadow-2xl border border-slate-200/85 sm:p-5 sm:pb-14 ${activeTab === 'contract' ? 'p-4 pb-4' : 'p-2 pb-8'}`}>
-          {activeTab === 'booking' ? (
+          {activeService !== 'contracts' && !isServiceEnabled(activeService) ? (
+            /* Sizing: the phone values (the unprefixed ones) are tuned to match
+               the live booking form's height. From sm: up the copy is set larger
+               for tablets/laptops, and the icon and vertical padding are trimmed
+               by the same amount so the card height does not grow. */
+            <div className="flex flex-col items-center justify-center py-2 sm:py-1 px-4 text-center">
+              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center mb-1 sm:mb-0.5">
+                <Clock size={16} className="text-slate-400" />
+              </div>
+              <h3 className="text-[11px] sm:text-lg font-bold text-brand-navy mb-0.5">
+                {activeService === 'buses' ? 'Bus Booking' : activeService === 'cabs' ? 'Cab Booking' : 'Traveller Booking'} Unavailable
+              </h3>
+              <p className="text-[10px] sm:text-[15px] text-slate-500 max-w-sm sm:max-w-lg leading-snug">
+                {getServiceMessage(activeService)}
+              </p>
+              <button
+                type="button"
+                onClick={() => setActiveService('contracts')}
+                className="mt-1.5 sm:mt-2 px-3.5 sm:px-5 py-1 sm:py-1.5 rounded-full bg-brand-navy text-white text-[9px] sm:text-[13px] font-bold hover:bg-brand-steel transition-colors"
+              >
+                Request Fleet Contract Instead
+              </button>
+            </div>
+          ) : activeTab === 'booking' ? (
             <form onSubmit={handleSearchSubmit}>
               {/* Trip type toggle */}
               <div className="flex gap-3 sm:gap-6 border-b border-slate-100 pb-1.5 sm:pb-3 mb-2 sm:mb-5 text-slate-700">
@@ -561,3 +571,4 @@ export default function HeroBooking({ routes, onSearch, onContractSubmit, active
     </>
   );
 }
+

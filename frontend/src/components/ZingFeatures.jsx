@@ -67,7 +67,7 @@ export default function ZingFeatures() {
       {/* Background layer — masked so it eases in over the hero on mobile */}
       <div
         className="features-bg pointer-events-none absolute inset-0 bg-brand-navy bg-cover bg-center bg-fixed"
-        style={{ backgroundImage: "linear-gradient(rgba(16,50,87,0.80), rgba(13,27,42,0.90)), url('/p1.png')" }}
+        style={{ backgroundImage: "linear-gradient(rgba(16,50,87,0.80), rgba(13,27,42,0.90)), url('/p1.jpg')" }}
         aria-hidden="true"
       ></div>
 

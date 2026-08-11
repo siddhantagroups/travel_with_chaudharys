@@ -26,6 +26,15 @@ app.use((req, res, next) => {
 // Database Connection and Auto-Seeding
 await connectDB();
 
+// Site-wide settings (persisted in memory; survives until server restart)
+let siteSettings = {
+  services: {
+    buses:    { enabled: false, message: 'Bus booking is currently unavailable. Please check back soon or contact us directly.' },
+    cabs:     { enabled: false, message: 'Cab booking is currently unavailable. Please check back soon or contact us directly.' },
+    traveler: { enabled: false, message: 'Traveller booking is currently unavailable. Please check back soon or contact us directly.' },
+  }
+};
+
 // Mock In-Memory Databases (pre-populated)
 let mockVehicles = [];
 let mockRoutes = [];
@@ -331,6 +340,24 @@ if (process.env.USE_MOCK_DB === 'false') {
 
 // Authentication (login, Google sign-in, session, config)
 app.use('/api/auth', authRouter);
+
+// Site settings — public read, admin write
+app.get('/api/settings', (req, res) => {
+  res.json(siteSettings);
+});
+
+app.put('/api/settings', requireAdmin, (req, res) => {
+  const { services } = req.body;
+  if (services) {
+    for (const key of ['buses', 'cabs', 'traveler']) {
+      if (services[key]) {
+        if (typeof services[key].enabled === 'boolean') siteSettings.services[key].enabled = services[key].enabled;
+        if (typeof services[key].message === 'string') siteSettings.services[key].message = services[key].message.trim();
+      }
+    }
+  }
+  res.json(siteSettings);
+});
 
 // Public: occupied seat numbers for a route on a date (no passenger PII exposed).
 app.get('/api/occupied-seats', async (req, res) => {

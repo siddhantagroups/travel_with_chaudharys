@@ -45,7 +45,8 @@ export default function Navbar({ currentView, setCurrentView, activeService, set
           className="flex items-center gap-1.5 sm:gap-2 cursor-pointer group shrink-0"
           onClick={() => {
             setCurrentView('public');
-            setActiveService('contracts'); // home lands on the default tab
+            setActiveService('contracts');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
         >
           <div className="relative overflow-hidden h-9 w-9 sm:h-12 sm:w-12 flex items-center justify-center bg-transparent shrink-0">

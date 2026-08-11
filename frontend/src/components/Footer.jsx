@@ -115,7 +115,7 @@ export default function Footer({ setCurrentView }) {
               <span>+91 87080 60565</span>
             </a>
           </div>
-          <div className="col-span-2 sm:col-span-1">
+          <div>
             <h4 className="text-white font-bold mb-2 sm:mb-3 tracking-wide uppercase text-[10px] sm:text-xs text-brand-silver">
               Management / Partner
             </h4>
