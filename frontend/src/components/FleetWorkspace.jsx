@@ -8,7 +8,8 @@ import ConfirmDialog from './ConfirmDialog';
 const PUBLIC = 'Available for Public Booking';
 const MAINTENANCE = 'Maintenance';
 
-const VEHICLE_TYPES = ['Volvo AC Seater', 'Sleeper Coach', 'School Bus', 'Mini Bus', 'Luxury SUV / Cab'];
+// Must stay within the enum on the Vehicle model, or saves fail validation.
+const VEHICLE_TYPES = ['School Bus', 'Mini Bus', 'Seater Bus', 'AC Coach', 'Tempo Traveller', 'Luxury SUV / Cab'];
 
 // Plates get typed with and without spaces/dashes — match on the bare characters.
 const bare = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');

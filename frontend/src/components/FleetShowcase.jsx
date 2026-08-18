@@ -7,15 +7,28 @@ export default function FleetShowcase({ vehicles, onSelectVehicleForTrip }) {
   // Filter public vehicles
   const publicVehicles = vehicles.filter(v => v.assignedTo === 'Available for Public Booking');
 
-  const vehicleTypes = ['All', 'Volvo AC Seater', 'Sleeper Coach', 'Luxury SUV / Cab'];
+  const vehicleTypes = ['All', 'AC Coach', 'Seater Bus', 'Tempo Traveller', 'Luxury SUV / Cab'];
   const filteredVehicles = selectedType === 'All'
     ? publicVehicles
     : publicVehicles.filter(v => v.type === selectedType);
 
-  const getVehicleImage = (type) => {
-    if (type === 'Volvo AC Seater') return 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&q=80&w=600';
-    if (type === 'Sleeper Coach') return 'https://images.unsplash.com/photo-1570125909232-eb263c188f7e?auto=format&fit=crop&q=80&w=600';
-    return 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=600'; // SUV/Cab
+  // Real photos of our own vehicles, keyed by plate. Anything without one yet
+  // falls back to the type-level stock image below.
+  const vehiclePhotos = {
+    'HR-49-E-5001': '/vehicle-innova-crysta-grey.jpg',
+    'HR-49-F-6001': '/vehicle-chaudhary-ac-coach.jpg',
+    'HR-49-F-6002': '/vehicle-chaudhary-transport-bus.jpg',
+    'HR-49-G-7001': '/vehicle-innova-crysta.jpg',
+    'HR-49-G-7002': '/vehicle-force-traveller.jpg',
+  };
+
+  const getVehicleImage = (vehicle) => {
+    const own = vehiclePhotos[vehicle.plateNumber];
+    if (own) return own;
+    if (vehicle.type === 'AC Coach' || vehicle.type === 'Seater Bus') {
+      return 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&q=80&w=600';
+    }
+    return 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=600'; // cars & vans
   };
 
   return (
@@ -67,7 +80,7 @@ export default function FleetShowcase({ vehicles, onSelectVehicleForTrip }) {
                 {/* Vehicle Image */}
                 <div className="h-40 sm:h-52 w-full bg-slate-200 relative overflow-hidden">
                   <img
-                    src={getVehicleImage(vehicle.type)}
+                    src={getVehicleImage(vehicle)}
                     alt={vehicle.modelName}
                     className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-[900ms] ease-out"
                   />

@@ -9,6 +9,7 @@ import AdminPanel from './components/AdminPanel';
 import AdminLogin from './components/AdminLogin';
 import ListingSearchBar from './components/ListingSearchBar';
 import Footer from './components/Footer';
+import AboutPage from './components/AboutPage';
 import { Bus, Calendar, Users, Info, Sparkles, MapPin, Clock, CheckCircle2, ArrowRight, ArrowLeft, Wifi, Search, Armchair, CreditCard } from 'lucide-react';
 
 // Dev: falls back to the local backend. Production build: set VITE_API_BASE (e.g. "/api").
@@ -17,11 +18,15 @@ const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000/api';
 // Representative image per vehicle type (used across the booking flow)
 const getVehicleImage = (type) => {
   switch (type) {
-    case 'Sleeper Coach':
-      return 'https://images.unsplash.com/photo-1570125909232-eb263c188f7e?auto=format&fit=crop&q=80&w=800';
     case 'Luxury SUV / Cab':
       return 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=800';
-    case 'Volvo AC Seater':
+    case 'Tempo Traveller':
+      return '/vehicle-force-traveller.jpg';
+    case 'AC Coach':
+      return '/vehicle-chaudhary-ac-coach.jpg';
+    case 'Seater Bus':
+      return '/vehicle-chaudhary-transport-bus.jpg';
+    case 'School Bus':
     case 'Mini Bus':
     default:
       return 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&q=80&w=800';
@@ -131,6 +136,15 @@ export default function App() {
     }
   };
 
+  const isAboutUrl = () => {
+    try {
+      const path = window.location.pathname.replace(/\/+$/, '').toLowerCase();
+      return path === '/about' || window.location.hash.toLowerCase() === '#about';
+    } catch (e) {
+      return false;
+    }
+  };
+
   // Switch view and keep the URL in sync (so refresh/back behave sensibly).
   const setView = (view) => {
     setCurrentView(view);
@@ -145,15 +159,22 @@ export default function App() {
     try {
       if (view === 'admin') {
         if (!isAdminUrl()) window.history.pushState(null, '', '/admin');
-      } else if (isAdminUrl() || window.location.pathname.startsWith('/search')) {
+      } else if (view === 'about') {
+        if (!isAboutUrl()) window.history.pushState(null, '', '/about');
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      } else if (isAdminUrl() || isAboutUrl() || window.location.pathname.startsWith('/search')) {
         window.history.pushState(null, '', '/');
+        // Coming back from /about (or /admin, /search) the browser keeps the old
+        // scroll offset. The About page is far taller than the home page, so that
+        // offset lands the visitor in the footer instead of the hero.
+        window.scrollTo({ top: 0, behavior: 'auto' });
       }
     } catch (e) { /* ignore */ }
   };
 
   // Sync the view with the URL (back/forward) and wire the secret shortcut.
   useEffect(() => {
-    const syncFromUrl = () => setCurrentView(isAdminUrl() ? 'admin' : 'public');
+    const syncFromUrl = () => setCurrentView(isAdminUrl() ? 'admin' : isAboutUrl() ? 'about' : 'public');
     syncFromUrl();
     const onKey = (e) => {
       // Ctrl+Shift+A (Cmd+Shift+A on Mac) opens the admin login from anywhere.
@@ -773,6 +794,26 @@ export default function App() {
             onCancel={() => setView('public')}
           />
         )
+      ) : currentView === 'about' ? (
+        <main className="flex-grow">
+          <AboutPage
+            onNavigateHome={() => {
+              setView('public');
+              setActiveService('contracts');
+              // Land on the hero with the Fleet Contracts tab open, then pulse the
+              // card so it is obvious where the enquiry form is.
+              setTimeout(() => {
+                const card = Array.from(document.querySelectorAll('[data-booking-card]'))
+                  .find((c) => c.offsetHeight > 0);
+                if (!card) return;
+                card.classList.remove('highlight-pulse');
+                void card.offsetWidth;
+                card.classList.add('highlight-pulse');
+                setTimeout(() => card.classList.remove('highlight-pulse'), 3000);
+              }, 120);
+            }}
+          />
+        </main>
       ) : (
         <main className="flex-grow">
 
@@ -1183,7 +1224,7 @@ export default function App() {
               <ZingFeatures />
 
               {/* School and corporate transport sections */}
-              <ContractPartners />
+              <ContractPartners onOpenAbout={() => setView('about')} />
 
               {/* Public Rent Showcase */}
               <FleetShowcase

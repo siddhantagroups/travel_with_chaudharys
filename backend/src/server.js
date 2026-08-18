@@ -1,4 +1,4 @@
-import 'dotenv/config';
+﻿import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import connectDB from './db.js';
@@ -47,81 +47,93 @@ let mockClients = [
   { _id: 'c4', name: 'DAV School', kind: 'School', contactPerson: '', phone: '' },
 ];
 
+/*
+  Canonical fleet â€” the single source of truth for vehicle data.
+
+  Both consumers read from this one array:
+    * seedMockData()  â€” the in-memory DB used when MongoDB is unreachable
+    * the MongoDB auto-seed further down
+
+  These used to be two separate hand-maintained copies of the same twenty
+  vehicles, so editing one and forgetting the other silently gave local and
+  production different fleets. Change a vehicle here and both follow.
+
+  Note this seeds an EMPTY database only. Renaming a vehicle that already
+  exists in production is a data change â€” do it in the admin panel.
+*/
+const VEHICLE_SEED = [
+  { plateNumber: 'HR-49-A-1001', modelName: 'Tata Starbus school 50S', type: 'School Bus', capacity: 50, assignedTo: 'Baddi International School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
+  { plateNumber: 'HR-49-A-1002', modelName: 'Tata Starbus school 50S', type: 'School Bus', capacity: 50, assignedTo: 'Baddi International School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
+  { plateNumber: 'HR-49-A-1003', modelName: 'Eicher Starline 40S', type: 'School Bus', capacity: 40, assignedTo: 'Baddi International School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
+  { plateNumber: 'HR-49-A-1004', modelName: 'Eicher Starline 40S', type: 'School Bus', capacity: 40, assignedTo: 'Baddi International School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
+  { plateNumber: 'HR-49-A-1005', modelName: 'Force Traveller School 20S', type: 'School Bus', capacity: 20, assignedTo: 'Baddi International School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
+
+  { plateNumber: 'HR-49-B-2001', modelName: 'Eicher Skyline Pro Staff', type: 'Mini Bus', capacity: 32, assignedTo: 'Eicher Parwanoo', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
+  { plateNumber: 'HR-49-B-2002', modelName: 'Eicher Skyline Pro Staff', type: 'Mini Bus', capacity: 32, assignedTo: 'Eicher Parwanoo', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
+  { plateNumber: 'HR-49-B-2003', modelName: 'Force Traveller 26S', type: 'Mini Bus', capacity: 26, assignedTo: 'Eicher Parwanoo', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
+
+  { plateNumber: 'HR-49-C-3001', modelName: 'Tata Starbus school 50S', type: 'School Bus', capacity: 50, assignedTo: 'Eicher School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
+  { plateNumber: 'HR-49-C-3002', modelName: 'Eicher Starline 40S', type: 'School Bus', capacity: 40, assignedTo: 'Eicher School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
+
+  { plateNumber: 'HR-49-D-4001', modelName: 'Tata Starbus school 50S', type: 'School Bus', capacity: 50, assignedTo: 'DAV School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
+  { plateNumber: 'HR-49-D-4002', modelName: 'Tata Starbus school 50S', type: 'School Bus', capacity: 50, assignedTo: 'DAV School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
+  { plateNumber: 'HR-49-D-4003', modelName: 'Eicher Starline 40S', type: 'School Bus', capacity: 40, assignedTo: 'DAV School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
+  { plateNumber: 'HR-49-D-4004', modelName: 'Force Traveller School 20S', type: 'School Bus', capacity: 20, assignedTo: 'DAV School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
+
+  // Public rental fleet â€” what the "Rent Our Vehicles" section shows.
+  {
+    plateNumber: 'HR-49-E-5001',
+    modelName: 'Toyota Innova Crysta',
+    type: 'Luxury SUV / Cab',
+    capacity: 7,
+    assignedTo: 'Available for Public Booking',
+    features: ['Air Conditioning', 'GPS Tracking', 'Leather Seats', 'Luggage Carrier', 'USB Charger']
+  },
+  {
+    plateNumber: 'HR-49-E-5002',
+    modelName: 'Seater Bus',
+    type: 'Seater Bus',
+    capacity: 45,
+    assignedTo: 'Available for Public Booking',
+    features: ['Air Conditioning', 'CCTV', 'GPS Tracking', 'USB Charging Port', 'Reclining Seats']
+  },
+  {
+    plateNumber: 'HR-49-F-6001',
+    modelName: 'AC Luxury Mini Coach',
+    type: 'AC Coach',
+    capacity: 32,
+    assignedTo: 'Available for Public Booking',
+    features: ['Air Conditioning', 'WiFi', 'CCTV', 'GPS Tracking', 'Reclining Seats', 'USB Charger']
+  },
+  {
+    plateNumber: 'HR-49-F-6002',
+    modelName: 'Tata Deluxe Seater Bus',
+    type: 'Seater Bus',
+    capacity: 50,
+    assignedTo: 'Available for Public Booking',
+    features: ['CCTV', 'GPS Tracking', 'Push-Back Seats', 'Luggage Carrier']
+  },
+  {
+    plateNumber: 'HR-49-G-7001',
+    modelName: 'Toyota Innova Crysta',
+    type: 'Luxury SUV / Cab',
+    capacity: 7,
+    assignedTo: 'Available for Public Booking',
+    features: ['Air Conditioning', 'GPS Tracking', 'Leather Seats', 'Luggage Carrier']
+  },
+  {
+    plateNumber: 'HR-49-G-7002',
+    modelName: 'Force Traveller 26',
+    type: 'Tempo Traveller',
+    capacity: 26,
+    assignedTo: 'Available for Public Booking',
+    features: ['Air Conditioning', 'GPS Tracking', 'Push-Back Seats', 'USB Charger', 'Luggage Carrier']
+  }
+];
+
 const seedMockData = () => {
-  mockVehicles = [
-    { _id: 'v1', plateNumber: 'HR-49-A-1001', modelName: 'Tata Starbus school 50S', type: 'School Bus', capacity: 50, assignedTo: 'Baddi International School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
-    { _id: 'v2', plateNumber: 'HR-49-A-1002', modelName: 'Tata Starbus school 50S', type: 'School Bus', capacity: 50, assignedTo: 'Baddi International School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
-    { _id: 'v3', plateNumber: 'HR-49-A-1003', modelName: 'Eicher Starline 40S', type: 'School Bus', capacity: 40, assignedTo: 'Baddi International School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
-    { _id: 'v4', plateNumber: 'HR-49-A-1004', modelName: 'Eicher Starline 40S', type: 'School Bus', capacity: 40, assignedTo: 'Baddi International School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
-    { _id: 'v5', plateNumber: 'HR-49-A-1005', modelName: 'Force Traveller School 20S', type: 'School Bus', capacity: 20, assignedTo: 'Baddi International School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
-
-    { _id: 'v6', plateNumber: 'HR-49-B-2001', modelName: 'Eicher Skyline Pro Staff', type: 'Mini Bus', capacity: 32, assignedTo: 'Eicher Parwanoo', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
-    { _id: 'v7', plateNumber: 'HR-49-B-2002', modelName: 'Eicher Skyline Pro Staff', type: 'Mini Bus', capacity: 32, assignedTo: 'Eicher Parwanoo', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
-    { _id: 'v8', plateNumber: 'HR-49-B-2003', modelName: 'Force Traveller 26S', type: 'Mini Bus', capacity: 26, assignedTo: 'Eicher Parwanoo', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
-
-    { _id: 'v9', plateNumber: 'HR-49-C-3001', modelName: 'Tata Starbus school 50S', type: 'School Bus', capacity: 50, assignedTo: 'Eicher School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
-    { _id: 'v10', plateNumber: 'HR-49-C-3002', modelName: 'Eicher Starline 40S', type: 'School Bus', capacity: 40, assignedTo: 'Eicher School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
-
-    { _id: 'v11', plateNumber: 'HR-49-D-4001', modelName: 'Tata Starbus school 50S', type: 'School Bus', capacity: 50, assignedTo: 'DAV School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
-    { _id: 'v12', plateNumber: 'HR-49-D-4002', modelName: 'Tata Starbus school 50S', type: 'School Bus', capacity: 50, assignedTo: 'DAV School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
-    { _id: 'v13', plateNumber: 'HR-49-D-4003', modelName: 'Eicher Starline 40S', type: 'School Bus', capacity: 40, assignedTo: 'DAV School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
-    { _id: 'v14', plateNumber: 'HR-49-D-4004', modelName: 'Force Traveller School 20S', type: 'School Bus', capacity: 20, assignedTo: 'DAV School', features: ['Air Conditioning', 'CCTV', 'GPS Tracking'] },
-
-    {
-      _id: 'v15',
-      plateNumber: 'HR-49-E-5001',
-      modelName: 'Volvo 9600 Multi-Axle Premium',
-      type: 'Volvo AC Seater',
-      capacity: 45,
-      assignedTo: 'Available for Public Booking',
-      features: ['Air Conditioning', 'WiFi', 'CCTV', 'GPS Tracking', 'USB Charging Port', 'Water Bottle', 'Reclining Seats']
-    },
-    {
-      _id: 'v16',
-      plateNumber: 'HR-49-E-5002',
-      modelName: 'Volvo 9400 AC Seater',
-      type: 'Volvo AC Seater',
-      capacity: 45,
-      assignedTo: 'Available for Public Booking',
-      features: ['Air Conditioning', 'CCTV', 'GPS Tracking', 'USB Charging Port', 'Reclining Seats']
-    },
-    {
-      _id: 'v17',
-      plateNumber: 'HR-49-F-6001',
-      modelName: 'Scania Metrolink AC Sleeper',
-      type: 'Sleeper Coach',
-      capacity: 30,
-      assignedTo: 'Available for Public Booking',
-      features: ['Air Conditioning', 'WiFi', 'CCTV', 'GPS Tracking', 'Blanket & Pillow', 'Reading Light', 'USB Charger']
-    },
-    {
-      _id: 'v18',
-      plateNumber: 'HR-49-F-6002',
-      modelName: 'Mahindra Cruzio AC Sleeper',
-      type: 'Sleeper Coach',
-      capacity: 30,
-      assignedTo: 'Available for Public Booking',
-      features: ['Air Conditioning', 'CCTV', 'GPS Tracking', 'Reading Light']
-    },
-    {
-      _id: 'v19',
-      plateNumber: 'HR-49-G-7001',
-      modelName: 'Toyota Innova Crysta',
-      type: 'Luxury SUV / Cab',
-      capacity: 7,
-      assignedTo: 'Available for Public Booking',
-      features: ['Air Conditioning', 'GPS Tracking', 'Leather Seats', 'Luggage Carrier']
-    },
-    {
-      _id: 'v20',
-      plateNumber: 'HR-49-G-7002',
-      modelName: 'Maruti Suzuki Ertiga',
-      type: 'Luxury SUV / Cab',
-      capacity: 6,
-      assignedTo: 'Available for Public Booking',
-      features: ['Air Conditioning', 'GPS Tracking', 'USB Charger']
-    }
-  ];
+  // Mock records need a stable synthetic id; MongoDB assigns its own _id.
+  mockVehicles = VEHICLE_SEED.map((v, i) => ({ _id: `v${i + 1}`, ...v }));
 
   mockRoutes = [
     { _id: 'r1', departure: 'Pinjor', destination: 'Baddi', departureTime: '07:30 AM', arrivalTime: '08:30 AM', price: 100, vehicle: 'v8' },
@@ -196,74 +208,8 @@ if (process.env.USE_MOCK_DB === 'false') {
     if (vehicleCount === 0) {
       console.log('No vehicles found in database. Auto-seeding MongoDB data...');
       
-      const vSeed = [
-        { plateNumber: 'HR-49-A-1001', modelName: 'Tata Starbus school 50S', type: 'School Bus', capacity: 50, assignedTo: 'Baddi International School' },
-        { plateNumber: 'HR-49-A-1002', modelName: 'Tata Starbus school 50S', type: 'School Bus', capacity: 50, assignedTo: 'Baddi International School' },
-        { plateNumber: 'HR-49-A-1003', modelName: 'Eicher Starline 40S', type: 'School Bus', capacity: 40, assignedTo: 'Baddi International School' },
-        { plateNumber: 'HR-49-A-1004', modelName: 'Eicher Starline 40S', type: 'School Bus', capacity: 40, assignedTo: 'Baddi International School' },
-        { plateNumber: 'HR-49-A-1005', modelName: 'Force Traveller School 20S', type: 'School Bus', capacity: 20, assignedTo: 'Baddi International School' },
-
-        { plateNumber: 'HR-49-B-2001', modelName: 'Eicher Skyline Pro Staff', type: 'Mini Bus', capacity: 32, assignedTo: 'Eicher Parwanoo' },
-        { plateNumber: 'HR-49-B-2002', modelName: 'Eicher Skyline Pro Staff', type: 'Mini Bus', capacity: 32, assignedTo: 'Eicher Parwanoo' },
-        { plateNumber: 'HR-49-B-2003', modelName: 'Force Traveller 26S', type: 'Mini Bus', capacity: 26, assignedTo: 'Eicher Parwanoo' },
-
-        { plateNumber: 'HR-49-C-3001', modelName: 'Tata Starbus school 50S', type: 'School Bus', capacity: 50, assignedTo: 'Eicher School' },
-        { plateNumber: 'HR-49-C-3002', modelName: 'Eicher Starline 40S', type: 'School Bus', capacity: 40, assignedTo: 'Eicher School' },
-
-        { plateNumber: 'HR-49-D-4001', modelName: 'Tata Starbus school 50S', type: 'School Bus', capacity: 50, assignedTo: 'DAV School' },
-        { plateNumber: 'HR-49-D-4002', modelName: 'Tata Starbus school 50S', type: 'School Bus', capacity: 50, assignedTo: 'DAV School' },
-        { plateNumber: 'HR-49-D-4003', modelName: 'Eicher Starline 40S', type: 'School Bus', capacity: 40, assignedTo: 'DAV School' },
-        { plateNumber: 'HR-49-D-4004', modelName: 'Force Traveller School 20S', type: 'School Bus', capacity: 20, assignedTo: 'DAV School' },
-
-        {
-          plateNumber: 'HR-49-E-5001',
-          modelName: 'Volvo 9600 Multi-Axle Premium',
-          type: 'Volvo AC Seater',
-          capacity: 45,
-          assignedTo: 'Available for Public Booking',
-          features: ['Air Conditioning', 'WiFi', 'CCTV', 'GPS Tracking', 'USB Charging Port', 'Water Bottle', 'Reclining Seats']
-        },
-        {
-          plateNumber: 'HR-49-E-5002',
-          modelName: 'Volvo 9400 AC Seater',
-          type: 'Volvo AC Seater',
-          capacity: 45,
-          assignedTo: 'Available for Public Booking',
-          features: ['Air Conditioning', 'CCTV', 'GPS Tracking', 'USB Charging Port', 'Reclining Seats']
-        },
-        {
-          plateNumber: 'HR-49-F-6001',
-          modelName: 'Scania Metrolink AC Sleeper',
-          type: 'Sleeper Coach',
-          capacity: 30,
-          assignedTo: 'Available for Public Booking',
-          features: ['Air Conditioning', 'WiFi', 'CCTV', 'GPS Tracking', 'Blanket & Pillow', 'Reading Light', 'USB Charger']
-        },
-        {
-          plateNumber: 'HR-49-F-6002',
-          modelName: 'Mahindra Cruzio AC Sleeper',
-          type: 'Sleeper Coach',
-          capacity: 30,
-          assignedTo: 'Available for Public Booking',
-          features: ['Air Conditioning', 'CCTV', 'GPS Tracking', 'Reading Light']
-        },
-        {
-          plateNumber: 'HR-49-G-7001',
-          modelName: 'Toyota Innova Crysta',
-          type: 'Luxury SUV / Cab',
-          capacity: 7,
-          assignedTo: 'Available for Public Booking',
-          features: ['Air Conditioning', 'GPS Tracking', 'Leather Seats', 'Luggage Carrier']
-        },
-        {
-          plateNumber: 'HR-49-G-7002',
-          modelName: 'Maruti Suzuki Ertiga',
-          type: 'Luxury SUV / Cab',
-          capacity: 6,
-          assignedTo: 'Available for Public Booking',
-          features: ['Air Conditioning', 'GPS Tracking', 'USB Charger']
-        }
-      ];
+      // Seeded from the canonical VEHICLE_SEED above — no second copy to drift.
+      const vSeed = VEHICLE_SEED;
 
       const seededVehicles = await Vehicle.insertMany(vSeed);
       
@@ -341,7 +287,7 @@ if (process.env.USE_MOCK_DB === 'false') {
 // Authentication (login, Google sign-in, session, config)
 app.use('/api/auth', authRouter);
 
-// Site settings — public read, admin write
+// Site settings â€” public read, admin write
 app.get('/api/settings', (req, res) => {
   res.json(siteSettings);
 });
@@ -465,7 +411,7 @@ app.delete('/api/vehicles/:id', requireAdmin, async (req, res) => {
 });
 
 
-// 1b. CLIENTS CRUD — schools and companies under contract
+// 1b. CLIENTS CRUD â€” schools and companies under contract
 app.get('/api/clients', async (req, res) => {
   try {
     if (process.env.USE_MOCK_DB === 'true') {
@@ -701,6 +647,14 @@ app.get('/api/inquiries', requireAdmin, async (req, res) => {
 
 app.post('/api/inquiries', async (req, res) => {
   try {
+    // Checked before the storage split so the mock and MongoDB paths behave the
+    // same. Without this the in-memory path accepted a completely empty body and
+    // filled the owner's inquiry list with blank rows.
+    const { orgName: org, phone: ph, vehicleType: vt } = req.body || {};
+    if (!org?.trim() || !ph?.trim() || !vt?.trim()) {
+      return res.status(400).json({ error: 'Organisation, phone and vehicle type are required.' });
+    }
+
     if (process.env.USE_MOCK_DB === 'true') {
       const newI = {
         _id: 'i_' + Math.random().toString(36).substring(2, 9),

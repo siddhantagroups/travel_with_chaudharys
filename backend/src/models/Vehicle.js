@@ -16,7 +16,19 @@ const vehicleSchema = new mongoose.Schema({
   type: {
     type: String,
     required: true,
-    enum: ['Volvo AC Seater', 'Sleeper Coach', 'School Bus', 'Mini Bus', 'Luxury SUV / Cab']
+    // 'Volvo AC Seater' and 'Sleeper Coach' are retired from the UI but kept
+    // here so vehicles already stored under them still validate on save.
+    // Removing a value from this list breaks every existing document using it.
+    enum: [
+      'School Bus',
+      'Mini Bus',
+      'Seater Bus',
+      'AC Coach',
+      'Tempo Traveller',
+      'Luxury SUV / Cab',
+      'Volvo AC Seater',
+      'Sleeper Coach'
+    ]
   },
   capacity: {
     type: Number,

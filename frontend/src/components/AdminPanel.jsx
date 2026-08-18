@@ -990,8 +990,9 @@ export default function AdminPanel({
                 >
                   <option value="School Bus">School Bus</option>
                   <option value="Mini Bus">Mini Bus</option>
-                  <option value="Volvo AC Seater">Volvo AC Seater</option>
-                  <option value="Sleeper Coach">Sleeper Coach</option>
+                  <option value="Seater Bus">Seater Bus</option>
+                  <option value="AC Coach">AC Coach</option>
+                  <option value="Tempo Traveller">Tempo Traveller</option>
                   <option value="Luxury SUV / Cab">Luxury SUV / Cab</option>
                 </select>
               </div>

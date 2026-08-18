@@ -6,14 +6,17 @@ const contractInquirySchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  // Only Organisation, Phone and Vehicle Type are marked required on the public
+  // enquiry form. These three must therefore be optional here: when they were
+  // required, an enquiry filled in exactly as the form asks was rejected by
+  // Mongoose on production and the lead was lost. A phone number is enough to
+  // follow up on — do not re-add `required` without also changing the form.
   contactPerson: {
     type: String,
-    required: true,
     trim: true
   },
   email: {
     type: String,
-    required: true,
     trim: true,
     lowercase: true
   },
@@ -24,7 +27,7 @@ const contractInquirySchema = new mongoose.Schema({
   },
   requiredFleetSize: {
     type: Number,
-    required: true
+    default: 1
   },
   vehicleType: {
     type: String,
@@ -33,7 +36,6 @@ const contractInquirySchema = new mongoose.Schema({
   },
   routeDescription: {
     type: String,
-    required: true,
     trim: true
   },
   status: {

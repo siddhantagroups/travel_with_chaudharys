@@ -93,38 +93,40 @@ export default function Footer({ setCurrentView }) {
 
         </div>
 
-        {/* Leadership & Contacts Row */}
+        {/* Leadership & Contacts Row — the role and the name open the About page
+            (its own scroll-to-top is handled by setView); the phone stays a plain
+            tel: link so tapping it still dials instead of navigating. */}
         <div className="mt-8 sm:mt-12 pt-6 sm:pt-8 border-t border-slate-800 grid grid-cols-2 sm:grid-cols-3 gap-5 sm:gap-8">
-          <div>
-            <h4 className="text-white font-bold mb-2 sm:mb-3 tracking-wide uppercase text-[10px] sm:text-xs text-brand-silver">
-              Managing Director
-            </h4>
-            <p className="text-white font-semibold text-sm sm:text-base">Dalbir Singh</p>
-            <a href="tel:+917082252200" className="inline-flex items-center gap-1.5 text-slate-400 hover:text-white mt-1 transition-colors font-medium text-xs sm:text-sm">
-              <Phone size={12} className="text-brand-steel shrink-0" />
-              <span>+91 70822 52200</span>
-            </a>
-          </div>
-          <div>
-            <h4 className="text-white font-bold mb-2 sm:mb-3 tracking-wide uppercase text-[10px] sm:text-xs text-brand-silver">
-              Co-Founder
-            </h4>
-            <p className="text-white font-semibold text-sm sm:text-base">Aditya Singh</p>
-            <a href="tel:+918708060565" className="inline-flex items-center gap-1.5 text-slate-400 hover:text-white mt-1 transition-colors font-medium text-xs sm:text-sm">
-              <Phone size={12} className="text-brand-steel shrink-0" />
-              <span>+91 87080 60565</span>
-            </a>
-          </div>
-          <div>
-            <h4 className="text-white font-bold mb-2 sm:mb-3 tracking-wide uppercase text-[10px] sm:text-xs text-brand-silver">
-              Management / Partner
-            </h4>
-            <p className="text-white font-semibold text-sm sm:text-base">Prajwal Singh</p>
-            <a href="tel:+917015096142" className="inline-flex items-center gap-1.5 text-slate-400 hover:text-white mt-1 transition-colors font-medium text-xs sm:text-sm">
-              <Phone size={12} className="text-brand-steel shrink-0" />
-              <span>+91 70150 96142</span>
-            </a>
-          </div>
+          {[
+            { role: 'Managing Director', name: 'Dalbir Singh', phone: '+91 70822 52200', href: 'tel:+917082252200' },
+            { role: 'Co-Founder', name: 'Aditya Singh', phone: '+91 87080 60565', href: 'tel:+918708060565' },
+            { role: 'Management / Partner', name: 'Prajwal Singh', phone: '+91 70150 96142', href: 'tel:+917015096142' },
+          ].map((person) => (
+            <div key={person.name}>
+              <button
+                type="button"
+                onClick={() => setCurrentView('about')}
+                aria-label={`${person.name}, ${person.role} — read more on the About page`}
+                className="group block text-left"
+              >
+                <h4 className="font-bold mb-2 sm:mb-3 tracking-wide uppercase text-[10px] sm:text-xs text-brand-silver group-hover:text-white transition-colors">
+                  {person.role}
+                </h4>
+                <p className="text-white font-semibold text-sm sm:text-base group-hover:text-brand-silver transition-colors">
+                  <span className="bg-[linear-gradient(currentColor,currentColor)] bg-[length:0%_1px] bg-no-repeat bg-left-bottom group-hover:bg-[length:100%_1px] transition-[background-size] duration-300">
+                    {person.name}
+                  </span>
+                </p>
+              </button>
+              <a
+                href={person.href}
+                className="inline-flex items-center gap-1.5 text-slate-400 hover:text-white mt-1 transition-colors font-medium text-xs sm:text-sm"
+              >
+                <Phone size={12} className="text-brand-steel shrink-0" />
+                <span>{person.phone}</span>
+              </a>
+            </div>
+          ))}
         </div>
 
         <div className="mt-8 sm:mt-12 pt-6 sm:pt-8 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center text-[10px] sm:text-xs text-slate-500">

@@ -1,7 +1,7 @@
 import React from 'react';
 import { GraduationCap, Building2, ArrowRight } from 'lucide-react';
 
-export default function ContractPartners() {
+export default function ContractPartners({ onOpenAbout }) {
   const partners = [
     {
       name: "Baddi International School",
@@ -103,11 +103,16 @@ export default function ContractPartners() {
             <span className="text-[9px] sm:text-[10px] font-bold tracking-[0.2em] uppercase text-slate-400">Our Fleet in Action</span>
             <span className="h-px flex-1 bg-slate-200"></span>
           </div>
+          {/* Buttons rather than clickable divs, so the whole gallery stays
+              reachable by keyboard and announces itself properly. */}
           <div className="grid grid-cols-2 sm:grid-cols-2 gap-2 sm:gap-2.5">
             {fleetImages.slice(0, 2).map((img, idx) => (
-              <div
+              <button
                 key={idx}
-                className="relative overflow-hidden rounded-xl sm:rounded-lg group shadow-md shadow-slate-900/10"
+                type="button"
+                onClick={onOpenAbout}
+                aria-label={`${img.alt} — read our story`}
+                className="relative overflow-hidden rounded-xl sm:rounded-lg group shadow-md shadow-slate-900/10 text-left cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-steel focus-visible:ring-offset-2"
               >
                 <div className="aspect-[16/10] sm:aspect-[16/9]">
                   <img
@@ -119,14 +124,17 @@ export default function ContractPartners() {
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-brand-navy/50 via-brand-navy/5 to-transparent"></div>
                 <div className="absolute inset-0 bg-brand-navy/10 group-hover:bg-transparent transition-colors duration-500"></div>
-              </div>
+              </button>
             ))}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-2.5 mt-2 sm:mt-2.5">
             {fleetImages.slice(2, 5).map((img, idx) => (
-              <div
+              <button
                 key={idx}
-                className={`relative overflow-hidden rounded-xl sm:rounded-lg group shadow-md shadow-slate-900/10 ${idx === 2 ? 'col-span-2 sm:col-span-1' : ''}`}
+                type="button"
+                onClick={onOpenAbout}
+                aria-label={`${img.alt} — read our story`}
+                className={`relative overflow-hidden rounded-xl sm:rounded-lg group shadow-md shadow-slate-900/10 text-left cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-steel focus-visible:ring-offset-2 ${idx === 2 ? 'col-span-2 sm:col-span-1' : ''}`}
               >
                 <div className="aspect-[16/10] sm:aspect-[16/9]">
                   <img
@@ -138,7 +146,7 @@ export default function ContractPartners() {
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-brand-navy/50 via-brand-navy/5 to-transparent"></div>
                 <div className="absolute inset-0 bg-brand-navy/10 group-hover:bg-transparent transition-colors duration-500"></div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
