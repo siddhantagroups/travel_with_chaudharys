@@ -344,10 +344,15 @@ const populateMockBooking = (booking) => {
 // 1. VEHICLES CRUD
 app.get('/api/vehicles', async (req, res) => {
   try {
+    // Ordered by plate, not by createdAt. The seed inserts every vehicle in one
+    // insertMany, so their timestamps are identical and `createdAt: -1` returned
+    // them in an arbitrary order that differed from the local mock list — the
+    // public fleet appeared shuffled, and re-adding a vehicle moved it. Plate
+    // order is stable, matches VEHICLE_SEED, and is identical on both paths.
     if (process.env.USE_MOCK_DB === 'true') {
-      return res.json(mockVehicles);
+      return res.json([...mockVehicles].sort((a, b) => a.plateNumber.localeCompare(b.plateNumber)));
     }
-    const vehicles = await Vehicle.find().sort({ createdAt: -1 });
+    const vehicles = await Vehicle.find().sort({ plateNumber: 1 });
     res.json(vehicles);
   } catch (err) {
     res.status(500).json({ error: err.message });

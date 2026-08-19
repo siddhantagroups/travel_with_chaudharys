@@ -26,6 +26,7 @@ const getVehicleImage = (type) => {
       return '/vehicle-chaudhary-ac-coach.jpg';
     case 'Seater Bus':
       return '/vehicle-chaudhary-transport-bus.jpg';
+    // Every remaining type is a bus of some kind, including legacy ones.
     case 'School Bus':
     case 'Mini Bus':
     default:

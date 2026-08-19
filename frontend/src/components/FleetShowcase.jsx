@@ -25,10 +25,13 @@ export default function FleetShowcase({ vehicles, onSelectVehicleForTrip }) {
   const getVehicleImage = (vehicle) => {
     const own = vehiclePhotos[vehicle.plateNumber];
     if (own) return own;
-    if (vehicle.type === 'AC Coach' || vehicle.type === 'Seater Bus') {
-      return 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&q=80&w=600';
+    // Only cabs get the car photo; everything else is a bus of some kind. Listing
+    // bus types explicitly meant a legacy type ('Volvo AC Seater', 'Sleeper
+    // Coach') or any newly added type fell through and showed a car.
+    if (vehicle.type === 'Luxury SUV / Cab') {
+      return 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=600';
     }
-    return 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=600'; // cars & vans
+    return 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&q=80&w=600'; // buses & coaches
   };
 
   return (
