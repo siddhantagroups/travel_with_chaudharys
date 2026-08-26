@@ -24,12 +24,17 @@ function useReveal() {
     // the whole page sitting at opacity 0. Measuring on scroll always resolves.
     let raf = 0;
 
+    // Two thresholds, because the first paint and later scrolling want opposite
+    // things. On load anything near the fold must already be visible, or the
+    // strip under the hero reads as an empty page. Once the visitor is scrolling,
+    // a generous threshold means the entrance finishes above the fold and is over
+    // before it is looked at — so from then on an element only starts animating
+    // once it has genuinely come into view.
+    let firstSweep = true;
+
     const sweep = () => {
       raf = 0;
-      // Slightly beyond the fold: content reveals just *before* it scrolls into
-      // view. At 0.9 the last section only appeared once you were almost at the
-      // page bottom, and on phones the space under the hero read as empty.
-      const limit = window.innerHeight * 1.15;
+      const limit = window.innerHeight * (firstSweep ? 1.15 : 0.85);
       const still = [];
       pending.forEach((el) => {
         const r = el.getBoundingClientRect();
@@ -42,6 +47,7 @@ function useReveal() {
         }
       });
       pending = still;
+      firstSweep = false;
       if (!pending.length) detach();
     };
 
@@ -153,12 +159,28 @@ const leaders = [
     phone: '+91 87080 60565',
     phoneHref: 'tel:+918708060565',
     side: 'right',
-    pull: 'My father’s generation earned the trust. My job is to make it visible — live, on a screen, to every parent.',
+    pull: 'In this business the paperwork is the promise. A permit that lapses is a route that stops.',
     body: [
-      'Aditya Singh is the son of the founders and represents the second generation of the business. He brought the company onto GPS tracking, CCTV-monitored cabins, and a booking system that lets a parent or an HR manager see exactly where a vehicle is.',
-      'He handles technology, digital operations and customer experience — turning twenty-five years of road knowledge into something a school can audit and a family can check from their phone.',
+      'Aditya Singh is a son of the founders and a lawyer by profession. He carries the legal and regulatory weight of the company — permits, fitness certificates, insurance, school transport compliance and the contracts behind every institutional agreement.',
+      'It is work most passengers never see, and the reason a Travel With Chaudharys vehicle is never the one held up at a check post. He brings that same rigour to the terms we sign with schools and industrial clients, so both sides know exactly what has been agreed.',
     ],
-    tags: ['Technology & Systems', 'Customer Experience'],
+    tags: ['Legal & Compliance', 'Contracts & Permits'],
+  },
+  {
+    index: '04',
+    name: 'Prajwal Singh',
+    role: 'Management & Technology',
+    photo: '/team-prajwal-singh.webp',
+    w: 879, h: 1035,
+    phone: '+91 70150 96142',
+    phoneHref: 'tel:+917015096142',
+    side: 'left',
+    pull: 'The buses were always good. People just had no way of seeing that before they booked one.',
+    body: [
+      'Prajwal Singh is the youngest of the family and a software engineer. He is the reason the company exists online at all — he took a business run on phone calls, paper diaries and word of mouth, and built it a presence people can actually find.',
+      'He handles the website, the booking system and the digital side of operations, turning the family’s traditional way of working into something simpler for everyone: a parent checking a route, a school comparing quotes, or an office manager booking a staff shuttle without a single phone call.',
+    ],
+    tags: ['Technology & Web', 'Digital Operations'],
   },
 ];
 
@@ -235,12 +257,14 @@ export default function AboutPage({ onNavigateHome }) {
       <style>{`
         [data-reveal]{
           opacity:0;
-          transform:translate3d(0,26px,0);
-          transition:opacity .85s cubic-bezier(.16,1,.3,1), transform .85s cubic-bezier(.16,1,.3,1);
+          transform:translate3d(0,30px,0);
+          transition:opacity 1.15s cubic-bezier(.16,1,.3,1), transform 1.15s cubic-bezier(.16,1,.3,1);
           will-change:opacity,transform;
         }
-        [data-reveal="left"]{ transform:translate3d(-42px,0,0); }
-        [data-reveal="right"]{ transform:translate3d(42px,0,0); }
+        /* Longer travel on the side entrances — this is the leadership zig-zag,
+           where the movement is the point and needs to be legible at a slow scroll. */
+        [data-reveal="left"]{ transform:translate3d(-70px,0,0); }
+        [data-reveal="right"]{ transform:translate3d(70px,0,0); }
         [data-reveal="scale"]{ transform:scale(.94); }
         [data-reveal].is-in{ opacity:1; transform:none; }
 
