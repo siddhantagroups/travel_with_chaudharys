@@ -131,7 +131,7 @@ const leaders = [
     side: 'right',
     pull: 'A bus is a promise. Somebody’s child, somebody’s shift, somebody’s livelihood is riding on it.',
     body: [
-      'Dalbir Singh founded Travel With Chaudharys with his brother in 2000, on the Kalka–Pinjor road. Every route on the board today was driven by him first, timed by him, and negotiated by him before it was ever offered to a school or a factory.',
+      'Dalbir Singh founded Travel With Chaudharys with his brother on 5 September 1995, running four buses on the Kalka–Pinjor road. Every route on the board today was driven by him first, timed by him, and negotiated by him before it was ever offered to a school or a factory.',
       'He leads the contract side of the business — the schools, the industrial shuttles, the long-standing relationships across Baddi and Parwanoo. Principals and transport managers have his personal number, and he still takes the call himself when a bus is running late.',
     ],
     tags: ['Contracts & Partnerships', 'Route Planning'],
@@ -201,7 +201,7 @@ const values = [
     icon: <Cpu size={20} />,
     kicker: 'Technology',
     title: 'Old discipline, new tools.',
-    text: 'Two decades of route knowledge, now backed by live tracking and digital records any parent or transport manager can verify.',
+    text: 'Three decades of route knowledge, now backed by live tracking and digital records any parent or transport manager can verify.',
   },
 ];
 
@@ -342,20 +342,20 @@ export default function AboutPage({ onNavigateHome }) {
               <div data-reveal className="flex items-center gap-3 mb-7 sm:mb-9">
                 <span className="h-1.5 w-1.5 rounded-full bg-brand-accent" />
                 <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.34em] text-brand-steel">
-                  Our Story &mdash; On the road since 2000
+                  Our Story &mdash; On the road since 1995
                 </span>
               </div>
 
               <h1 className="font-black tracking-[-0.045em] text-brand-navy text-[2.75rem] leading-[0.95] sm:text-7xl lg:text-[5.4rem]">
                 <span data-reveal data-delay="60" className="block">Two brothers.</span>
-                <span data-reveal data-delay="170" className="block">One bus.</span>
+                <span data-reveal data-delay="170" className="block">Four buses.</span>
                 <span data-reveal data-delay="280" className="block text-brand-steel">A road they never left.</span>
               </h1>
 
               <p data-reveal data-delay="430" className="mt-8 sm:mt-10 max-w-xl text-sm sm:text-lg text-slate-600 font-medium leading-relaxed">
-                What began as a single bus is now a fleet moving thousands of students and industrial
-                staff across Haryana and Himachal every day &mdash; on vehicles we own, with drivers we
-                trained ourselves.
+                What began as four buses in 1995 is now a fleet moving thousands of students and
+                industrial staff across Haryana and Himachal every day &mdash; on vehicles we own, with
+                drivers we trained ourselves.
               </p>
             </div>
           </div>
@@ -639,8 +639,8 @@ export default function AboutPage({ onNavigateHome }) {
 
           <blockquote data-reveal data-delay="80" className="mt-4 sm:mt-6">
             <p className="text-[1.4rem] sm:text-[2.6rem] lg:text-[3rem] font-black tracking-[-0.03em] text-brand-navy leading-[1.18]">
-              We started with one bus and a route nobody wanted. What we sold was never a seat
-              &mdash; it was the certainty that it would arrive.
+              We started with four buses and the routes nobody else wanted. What we sold was never
+              a seat &mdash; it was the certainty that it would arrive.
             </p>
           </blockquote>
 

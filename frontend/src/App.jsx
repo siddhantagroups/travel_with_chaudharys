@@ -1,15 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import Navbar from './components/Navbar';
 import HeroBooking from './components/HeroBooking';
 import ZingFeatures from './components/ZingFeatures';
 import ContractPartners from './components/ContractPartners';
 import FleetShowcase from './components/FleetShowcase';
 import PaymentGateway from './components/PaymentGateway';
-import AdminPanel from './components/AdminPanel';
-import AdminLogin from './components/AdminLogin';
 import ListingSearchBar from './components/ListingSearchBar';
 import Footer from './components/Footer';
 import AboutPage from './components/AboutPage';
+
+/*
+  The admin panel is roughly a third of the source but is only ever opened by the
+  owner. Loading it lazily keeps it out of the bundle every public visitor
+  downloads; it is fetched on demand the first time /admin is opened.
+*/
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
+const AdminLogin = lazy(() => import('./components/AdminLogin'));
+
+// Shown only while that admin chunk is in flight — a fraction of a second.
+const AdminChunkFallback = () => (
+  <div className="flex-grow flex items-center justify-center py-32">
+    <div className="flex items-center gap-3 text-slate-400">
+      <span className="w-5 h-5 rounded-full border-2 border-slate-200 border-t-brand-steel animate-spin" />
+      <span className="text-xs font-bold uppercase tracking-[0.2em]">Loading</span>
+    </div>
+  </div>
+);
 import { Bus, Calendar, Users, Info, Sparkles, MapPin, Clock, CheckCircle2, ArrowRight, ArrowLeft, Wifi, Search, Armchair, CreditCard } from 'lucide-react';
 
 // Dev: falls back to the local backend. Production build: set VITE_API_BASE (e.g. "/api").
@@ -752,7 +768,8 @@ export default function App() {
 
       {/* Main View Area */}
       {currentView === 'admin' ? (
-        adminUser ? (
+        <Suspense fallback={<AdminChunkFallback />}>
+        {adminUser ? (
           <AdminPanel
             vehicles={vehicles}
             routes={routes}
@@ -794,7 +811,8 @@ export default function App() {
             onLoginSuccess={handleLoginSuccess}
             onCancel={() => setView('public')}
           />
-        )
+        )}
+        </Suspense>
       ) : currentView === 'about' ? (
         <main className="flex-grow">
           <AboutPage

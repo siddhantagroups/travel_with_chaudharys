@@ -1,6 +1,8 @@
 ﻿import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import connectDB from './db.js';
 import authRouter, { requireAdmin } from './auth.js';
 
@@ -14,14 +16,85 @@ import Client from './models/Client.js';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
-app.use(express.json());
+// Behind Nginx, so trust exactly one proxy hop. Without this the rate limiters
+// below would see Nginx's IP for every request and throttle all visitors as one.
+app.set('trust proxy', 1);
 
-// Request logger
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
+// Don't advertise the stack to anyone scanning for Express-specific exploits.
+app.disable('x-powered-by');
+
+// Security headers. contentSecurityPolicy is off because Nginx serves the
+// frontend, not Express — this app only ever returns JSON. noSniff and
+// frameguard are named explicitly rather than left to defaults, so a future
+// helmet upgrade can't quietly drop them.
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    noSniff: true,
+    frameguard: { action: 'sameorigin' },
+  })
+);
+
+/*
+  In production the frontend is served from the same domain and calls a relative
+  "/api", so no cross-origin request is legitimate. ALLOWED_ORIGINS (comma
+  separated) can widen that if ever needed. With no value set we fall back to
+  open CORS, which keeps local development working.
+*/
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+app.use(
+  cors(
+    allowedOrigins.length
+      ? {
+          origin: (origin, cb) =>
+            // No Origin header = same-origin or a server-side call; allow it.
+            !origin || allowedOrigins.includes(origin)
+              ? cb(null, true)
+              : cb(new Error('Not allowed by CORS')),
+        }
+      : {}
+  )
+);
+
+// A booking or enquiry is a few hundred bytes; the default 100kb is already
+// generous. Capping it stops a large body from tying up the process.
+app.use(express.json({ limit: '32kb' }));
+
+// Brute-forcing the admin password was previously unlimited: the login endpoint
+// accepted as many guesses per second as a script could send. Counts failures
+// only, so a working admin is never locked out by their own successful logins.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
 });
+
+// Public write endpoints (bookings, enquiries) — stops a script flooding the
+// owner's inbox or seat map, while staying far above real human usage.
+const writeLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again shortly.' },
+});
+
+// Request logger — quiet in production, where pm2 would otherwise write a line
+// per request forever and the noise buries real errors.
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+  });
+}
 
 // Database Connection and Auto-Seeding
 await connectDB();
@@ -285,7 +358,8 @@ if (process.env.USE_MOCK_DB === 'false') {
 // --- API ROUTES ---
 
 // Authentication (login, Google sign-in, session, config)
-app.use('/api/auth', authRouter);
+// Limiter sits in front of the router so it guards /login and /google alike.
+app.use('/api/auth', loginLimiter, authRouter);
 
 // Site settings â€” public read, admin write
 app.get('/api/settings', (req, res) => {
@@ -590,7 +664,7 @@ app.get('/api/bookings', requireAdmin, async (req, res) => {
   }
 });
 
-app.post('/api/bookings', async (req, res) => {
+app.post('/api/bookings', writeLimiter, async (req, res) => {
   try {
     const { route, date, seatNumbers, passengerName, passengerAge, passengerEmail, passengerPhone, paymentId, paymentStatus, amountPaid } = req.body;
     
@@ -650,7 +724,7 @@ app.get('/api/inquiries', requireAdmin, async (req, res) => {
   }
 });
 
-app.post('/api/inquiries', async (req, res) => {
+app.post('/api/inquiries', writeLimiter, async (req, res) => {
   try {
     // Checked before the storage split so the mock and MongoDB paths behave the
     // same. Without this the in-memory path accepted a completely empty body and
