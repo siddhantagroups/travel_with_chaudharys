@@ -141,7 +141,7 @@ const leaders = [
     name: 'Daljeet Singh',
     role: 'Managing Director',
     photo: '/team-daljeet-singh.webp',
-    w: 900, h: 1144,
+    w: 900, h: 1349,
     side: 'left',
     pull: 'Safety happens in the workshop. Not on paper — on the ramp, every single week.',
     body: [
