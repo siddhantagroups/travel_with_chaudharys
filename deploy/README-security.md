@@ -63,7 +63,7 @@ holds the security headers it includes everywhere.
 
 ```bash
 apt install -y certbot python3-certbot-nginx
-certbot certonly --nginx -d travelwithchaudhay.cloud -d www.travelwithchaudhay.cloud
+certbot certonly --nginx -d travelwithchaudhary.cloud -d www.travelwithchaudhary.cloud
 apt install -y libnginx-mod-http-brotli-static libnginx-mod-http-brotli-filter   # optional, see the file
 cp /etc/nginx/sites-available/twc /root/twc-nginx-backup.conf                     # keep the old one
 cp ~/twc/deploy/nginx-headers.conf /etc/nginx/snippets/twc-headers.conf
