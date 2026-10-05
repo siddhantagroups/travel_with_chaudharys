@@ -254,7 +254,7 @@ export default function AboutPage({ onNavigateHome }) {
 
   return (
     <div className="about-page-scale bg-white overflow-x-clip">
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         [data-reveal]{
           opacity:0;
           transform:translate3d(0,30px,0);
@@ -301,7 +301,7 @@ export default function AboutPage({ onNavigateHome }) {
           .float-slow,.scroll-cue{animation:none}
           .rule-draw{transform:none}
         }
-      `}</style>
+      ` }} />
 
       {/* ================= HERO =================
           The photograph is bright and mostly open sky, so this hero is light

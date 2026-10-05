@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Users, Calendar, ArrowRight } from 'lucide-react';
+import LazyImage from './LazyImage';
 
 export default function FleetShowcase({ vehicles, onSelectVehicleForTrip }) {
   const [selectedType, setSelectedType] = useState('All');
@@ -15,11 +16,11 @@ export default function FleetShowcase({ vehicles, onSelectVehicleForTrip }) {
   // Real photos of our own vehicles, keyed by plate. Anything without one yet
   // falls back to the type-level stock image below.
   const vehiclePhotos = {
-    'HR-49-E-5001': '/vehicle-innova-crysta-grey.jpg',
-    'HR-49-F-6001': '/vehicle-chaudhary-ac-coach.jpg',
-    'HR-49-F-6002': '/vehicle-chaudhary-transport-bus.jpg',
-    'HR-49-G-7001': '/vehicle-innova-crysta.jpg',
-    'HR-49-G-7002': '/vehicle-force-traveller.jpg',
+    'HR-49-E-5001': '/vehicle-innova-crysta-grey.webp',
+    'HR-49-F-6001': '/vehicle-chaudhary-ac-coach.webp',
+    'HR-49-F-6002': '/vehicle-chaudhary-transport-bus.webp',
+    'HR-49-G-7001': '/vehicle-innova-crysta.webp',
+    'HR-49-G-7002': '/vehicle-force-traveller.webp',
   };
 
   const getVehicleImage = (vehicle) => {
@@ -35,7 +36,7 @@ export default function FleetShowcase({ vehicles, onSelectVehicleForTrip }) {
   };
 
   return (
-    <section id="fleet" className="relative py-10 sm:py-14 bg-white overflow-hidden">
+    <section id="fleet" className="defer-render relative py-10 sm:py-14 bg-white overflow-hidden">
       <div className="pointer-events-none absolute top-1/3 right-0 w-48 sm:w-96 h-48 sm:h-96 rounded-full bg-brand-steel/5 blur-3xl"></div>
 
       <div className="relative max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
@@ -82,9 +83,11 @@ export default function FleetShowcase({ vehicles, onSelectVehicleForTrip }) {
               >
                 {/* Vehicle Image */}
                 <div className="h-40 sm:h-52 w-full bg-slate-200 relative overflow-hidden">
-                  <img
+                  <LazyImage
                     src={getVehicleImage(vehicle)}
                     alt={vehicle.modelName}
+                    width="800"
+                    height="450"
                     className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-[900ms] ease-out"
                   />
                   {/* Gradient overlay for depth + legibility */}

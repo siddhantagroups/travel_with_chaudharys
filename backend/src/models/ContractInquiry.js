@@ -49,4 +49,7 @@ const contractInquirySchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+// The admin list is newest first.
+contractInquirySchema.index({ createdAt: -1 });
+
 export default mongoose.model('ContractInquiry', contractInquirySchema);

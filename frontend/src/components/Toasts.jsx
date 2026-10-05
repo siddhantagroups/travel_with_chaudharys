@@ -61,7 +61,7 @@ export default function Toasts({ toasts, onDismiss }) {
 
   return (
     <>
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @keyframes confirmPop {
           0%   { opacity: 0; transform: scale(0.92) translateY(6px); }
           60%  { opacity: 1; transform: scale(1.01); }
@@ -82,7 +82,7 @@ export default function Toasts({ toasts, onDismiss }) {
         @media (prefers-reduced-motion: reduce) {
           .confirm-pop, .confirm-ring, .confirm-tick { animation: none; }
         }
-      `}</style>
+      ` }} />
 
       <div role="status" aria-live="polite" className="sr-only">
         {current ? `${current.title}. ${current.detail || ''}` : ''}

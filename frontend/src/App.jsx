@@ -4,32 +4,37 @@ import HeroBooking from './components/HeroBooking';
 import ZingFeatures from './components/ZingFeatures';
 import ContractPartners from './components/ContractPartners';
 import FleetShowcase from './components/FleetShowcase';
-import PaymentGateway from './components/PaymentGateway';
 import ListingSearchBar from './components/ListingSearchBar';
 import Footer from './components/Footer';
-import AboutPage from './components/AboutPage';
 
 /*
   The admin panel is roughly a third of the source but is only ever opened by the
   owner. Loading it lazily keeps it out of the bundle every public visitor
   downloads; it is fetched on demand the first time /admin is opened.
 */
-const AdminPanel = lazy(() => import('./components/AdminPanel'));
-const AdminLogin = lazy(() => import('./components/AdminLogin'));
+const loadAdminPanel = () => import('./components/AdminPanel');
+const loadAdminLogin = () => import('./components/AdminLogin');
+const AdminPanel = lazy(loadAdminPanel);
+const AdminLogin = lazy(loadAdminLogin);
 
-// Shown only while that admin chunk is in flight — a fraction of a second.
-const AdminChunkFallback = () => (
-  <div className="flex-grow flex items-center justify-center py-32">
-    <div className="flex items-center gap-3 text-slate-400">
-      <span className="w-5 h-5 rounded-full border-2 border-slate-200 border-t-brand-steel animate-spin" />
-      <span className="text-xs font-bold uppercase tracking-[0.2em]">Loading</span>
-    </div>
-  </div>
-);
+// Also on demand: the About page (opened from the navbar, which starts the
+// download on hover/touch) and the checkout (only after choosing seats).
+const AboutPage = lazy(() => import('./components/AboutPage'));
+const PaymentGateway = lazy(() => import('./components/PaymentGateway'));
+
+// The "Secure gateway" screen. Small, so it ships with the site and can show
+// the instant /admin opens — while the admin code downloads and while a saved
+// session is restored — rather than a plain spinner.
+import AdminGateway from './components/AdminGateway';
+// How long the gateway holds on arriving at /admin, and its fade — the same
+// timings as the sign-in screen's own entry veil.
+const GATEWAY_HOLD_MS = 1400;
+const GATEWAY_FADE_MS = 440;
 import { Bus, Calendar, Users, Info, Sparkles, MapPin, Clock, CheckCircle2, ArrowRight, ArrowLeft, Wifi, Search, Armchair, CreditCard } from 'lucide-react';
 
-// Dev: falls back to the local backend. Production build: set VITE_API_BASE (e.g. "/api").
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000/api';
+// Always same-origin: Nginx forwards /api in production, the Vite dev server
+// proxies it locally. VITE_API_BASE can override it.
+const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 // Representative image per vehicle type (used across the booking flow)
 const getVehicleImage = (type) => {
@@ -37,11 +42,11 @@ const getVehicleImage = (type) => {
     case 'Luxury SUV / Cab':
       return 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=800';
     case 'Tempo Traveller':
-      return '/vehicle-force-traveller.jpg';
+      return '/vehicle-force-traveller.webp';
     case 'AC Coach':
-      return '/vehicle-chaudhary-ac-coach.jpg';
+      return '/vehicle-chaudhary-ac-coach.webp';
     case 'Seater Bus':
-      return '/vehicle-chaudhary-transport-bus.jpg';
+      return '/vehicle-chaudhary-transport-bus.webp';
     // Every remaining type is a bus of some kind, including legacy ones.
     case 'School Bus':
     case 'Mini Bus':
@@ -116,11 +121,10 @@ export default function App() {
   const [inquiries, setInquiries] = useState([]);
   const [clients, setClients] = useState([]);
 
-  // Auth state
-  const [authToken, setAuthToken] = useState(() => {
-    try { return localStorage.getItem('twc_admin_token') || null; } catch { return null; }
-  });
+  // Auth state. The session itself lives in an httpOnly cookie the page can't
+  // read; adminUser is only what the server says about it.
   const [adminUser, setAdminUser] = useState(null);
+  const [gateway, setGateway] = useState('in'); // 'in' | 'out' | 'gone'
 
   // Search Results States
   const [searchResults, setSearchResults] = useState(null);
@@ -140,6 +144,7 @@ export default function App() {
   const [showTicketReceipt, setShowTicketReceipt] = useState(null);
   const [inquiryVehicle, setInquiryVehicle] = useState(null);
   const [serviceConfig, setServiceConfig] = useState(null);
+  const [adminSections, setAdminSections] = useState({ routes: false, bookings: false });
 
   // --- HIDDEN ADMIN ACCESS ---
   // There is intentionally NO public admin button. The admin panel is only reachable
@@ -209,6 +214,20 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Arriving at /admin: the Secure gateway screen holds, then fades — whether
+  // the owner still has to sign in or is already signed in. The admin code
+  // starts downloading at the same moment, so it is ready behind the screen
+  // and "Access granted" goes straight to the dashboard.
+  useEffect(() => {
+    if (currentView !== 'admin') return;
+    loadAdminLogin();
+    loadAdminPanel();
+    setGateway('in');
+    const t1 = setTimeout(() => setGateway('out'), GATEWAY_HOLD_MS);
+    const t2 = setTimeout(() => setGateway('gone'), GATEWAY_HOLD_MS + GATEWAY_FADE_MS);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [currentView]);
+
   // Fetch public data on mount + restore any existing admin session.
   useEffect(() => {
     fetchPublicData();
@@ -216,14 +235,12 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Authenticated fetch: attaches the bearer token and logs out on 401.
+  // Admin fetch: sends the session cookie plus the header the server's CSRF
+  // check requires, and signs out on 401.
   const authFetch = async (url, options = {}) => {
-    let token = null;
-    try { token = localStorage.getItem('twc_admin_token'); } catch { /* ignore */ }
-    const headers = { ...(options.headers || {}) };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(url, { ...options, headers });
-    if (res.status === 401) handleLogout();
+    const headers = { ...(options.headers || {}), 'X-Requested-With': 'XMLHttpRequest' };
+    const res = await fetch(url, { ...options, headers, credentials: 'same-origin' });
+    if (res.status === 401) handleLogout({ server: false });
     return res;
   };
 
@@ -242,19 +259,25 @@ export default function App() {
       if (sRes.ok) {
         const settings = await sRes.json();
         if (settings.services) setServiceConfig(settings.services);
+        if (settings.sections) setAdminSections(settings.sections);
       }
     } catch (err) {
       console.error('Error fetching public data:', err);
     }
   };
 
-  // Admin-only data — requires a valid session token.
+  // Admin-only data — requires a valid session. Clients are fetched again
+  // because the public list leaves out contact people and phone numbers.
   const fetchAdminData = async () => {
     try {
-      const bRes = await authFetch(`${API_BASE}/bookings`);
-      const iRes = await authFetch(`${API_BASE}/inquiries`);
+      const [bRes, iRes, cRes] = await Promise.all([
+        authFetch(`${API_BASE}/bookings`),
+        authFetch(`${API_BASE}/inquiries`),
+        authFetch(`${API_BASE}/clients`),
+      ]);
       if (bRes.ok) setBookings(await bRes.json());
       if (iRes.ok) setInquiries(await iRes.json());
+      if (cRes.ok) setClients(await cRes.json());
     } catch (err) {
       console.error('Error fetching admin data:', err);
     }
@@ -263,26 +286,20 @@ export default function App() {
   // Refresh everything relevant after a mutation (public + admin when logged in).
   const refreshAll = async () => {
     await fetchPublicData();
-    let token = null;
-    try { token = localStorage.getItem('twc_admin_token'); } catch { /* ignore */ }
-    if (token) await fetchAdminData();
+    if (adminUser) await fetchAdminData();
   };
 
-  // Restore a saved session if its token is still valid on the server.
+  // Restore the session if the server still recognises the cookie.
   const restoreSession = async () => {
-    let token = null;
-    try { token = localStorage.getItem('twc_admin_token'); } catch { /* ignore */ }
-    if (!token) return;
+    // Sessions used to be kept in localStorage, where any script could read
+    // them. Clear any left over from before.
+    try { localStorage.removeItem('twc_admin_token'); } catch { /* ignore */ }
     try {
-      const res = await fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) {
-        const data = await res.json();
+      const res = await fetch(`${API_BASE}/auth/me`, { credentials: 'same-origin' });
+      const data = res.ok ? await res.json() : null;
+      if (data?.user) {
         setAdminUser(data.user);
-        setAuthToken(token);
         fetchAdminData();
-      } else {
-        try { localStorage.removeItem('twc_admin_token'); } catch { /* ignore */ }
-        setAuthToken(null);
       }
     } catch (err) {
       console.error('Session restore failed:', err);
@@ -293,9 +310,7 @@ export default function App() {
   // Holds back until the admin data is in, so the dashboard opens already
   // populated instead of flashing empty. minMs keeps the sign-in transition on
   // screen long enough to read when the fetch returns almost instantly.
-  const handleLoginSuccess = async (token, user, minMs = 0) => {
-    try { localStorage.setItem('twc_admin_token', token); } catch { /* ignore */ }
-    setAuthToken(token);
+  const handleLoginSuccess = async (user, minMs = 0) => {
     setView('admin');
 
     const startedAt = Date.now();
@@ -306,9 +321,15 @@ export default function App() {
     setAdminUser(user); // this swaps the gate for the panel
   };
 
-  const handleLogout = () => {
-    try { localStorage.removeItem('twc_admin_token'); } catch { /* ignore */ }
-    setAuthToken(null);
+  // Ends the session on the server too (unless the server already rejected it).
+  const handleLogout = ({ server = true } = {}) => {
+    if (server) {
+      fetch(`${API_BASE}/auth/logout`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      }).catch(() => { /* the cookie expires on its own */ });
+    }
     setAdminUser(null);
     setBookings([]);
     setInquiries([]);
@@ -768,7 +789,10 @@ export default function App() {
 
       {/* Main View Area */}
       {currentView === 'admin' ? (
-        <Suspense fallback={<AdminChunkFallback />}>
+        <>
+        {gateway !== 'gone' && <AdminGateway fading={gateway === 'out'} />}
+        {/* If the admin code is still downloading, the same screen stays up. */}
+        <Suspense fallback={<AdminGateway />}>
         {adminUser ? (
           <AdminPanel
             vehicles={vehicles}
@@ -787,13 +811,14 @@ export default function App() {
             onUpdateRoute={handleUpdateRoute}
             onDeleteRoute={handleDeleteRoute}
             onUpdateInquiryStatus={handleUpdateInquiryStatus}
+            apiBase={API_BASE}
+            authFetch={authFetch}
             serviceConfig={serviceConfig}
             onUpdateServiceConfig={async (newConfig) => {
               try {
-                const token = localStorage.getItem('twc_admin_token');
-                const res = await fetch(`${API_BASE}/settings`, {
+                const res = await authFetch(`${API_BASE}/settings`, {
                   method: 'PUT',
-                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                  headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ services: newConfig })
                 });
                 if (res.ok) {
@@ -802,6 +827,22 @@ export default function App() {
                 }
               } catch (err) {
                 console.error('Failed to update service config:', err);
+              }
+            }}
+            adminSections={adminSections}
+            onUpdateAdminSections={async (changes) => {
+              try {
+                const res = await authFetch(`${API_BASE}/settings`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ sections: changes })
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  if (data.sections) setAdminSections(data.sections);
+                }
+              } catch (err) {
+                console.error('Failed to update admin sections:', err);
               }
             }}
           />
@@ -813,8 +854,12 @@ export default function App() {
           />
         )}
         </Suspense>
+        </>
       ) : currentView === 'about' ? (
         <main className="flex-grow">
+          {/* Plain page background while the About page's code arrives — it
+              is usually fetched already, when the About link is hovered or touched. */}
+          <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
           <AboutPage
             onNavigateHome={() => {
               setView('public');
@@ -832,6 +877,7 @@ export default function App() {
               }, 120);
             }}
           />
+          </Suspense>
         </main>
       ) : (
         <main className="flex-grow">
@@ -1258,11 +1304,13 @@ export default function App() {
 
       {/* Payment Gateway Dialog */}
       {showPayment && activeBookingRef && (
-        <PaymentGateway
-          bookingInfo={activeBookingRef}
-          onClose={() => setShowPayment(false)}
-          onPaymentSuccess={handlePaymentSuccess}
-        />
+        <Suspense fallback={null}>
+          <PaymentGateway
+            bookingInfo={activeBookingRef}
+            onClose={() => setShowPayment(false)}
+            onPaymentSuccess={handlePaymentSuccess}
+          />
+        </Suspense>
       )}
 
       {/* Fleet Inquiry Modal */}

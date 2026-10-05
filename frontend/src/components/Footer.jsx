@@ -11,7 +11,7 @@ export default function Footer({ setCurrentView }) {
   };
 
   return (
-    <footer className="bg-brand-navy text-slate-300 border-t-4 border-brand-steel">
+    <footer className="defer-render bg-brand-navy text-slate-300 border-t-4 border-brand-steel">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-10 sm:py-16">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-12">
 
@@ -130,7 +130,7 @@ export default function Footer({ setCurrentView }) {
         </div>
 
         <div className="mt-8 sm:mt-12 pt-6 sm:pt-8 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center text-[10px] sm:text-xs text-slate-500">
-          <p>© {new Date().getFullYear()} Travel With Chaudharys (TWC). All rights reserved.</p>
+          <p suppressHydrationWarning>© {new Date().getFullYear()} Travel With Chaudharys (TWC). All rights reserved.</p>
           <p className="flex items-center gap-1 mt-3 md:mt-0">
             Made with <Heart size={11} className="text-red-500 fill-red-500" /> for Pinjor and Baddi Commuters
           </p>

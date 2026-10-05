@@ -30,4 +30,8 @@ const routeSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+// Listed newest first; looked up by vehicle when one is edited or removed.
+routeSchema.index({ createdAt: -1 });
+routeSchema.index({ vehicle: 1 });
+
 export default mongoose.model('Route', routeSchema);

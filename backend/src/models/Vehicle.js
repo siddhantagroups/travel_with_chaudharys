@@ -45,7 +45,45 @@ const vehicleSchema = new mongoose.Schema({
   features: {
     type: [String],
     default: ['Air Conditioning', 'CCTV', 'GPS Tracking', 'Pushback Seats']
+  },
+
+  /*
+    Statutory document expiry dates. Every field is optional: a vehicle added
+    today has none of them, and the UI shows those as "Not set" rather than
+    pretending they are valid.
+
+    Only the expiry date and a reference number are kept. The owner's name,
+    address, chassis and engine numbers are deliberately NOT stored — holding
+    the minimum is the simplest protection if this ever comes from an RC
+    lookup, and none of it is needed to answer "what expires next".
+
+    Status (expired / due soon / valid) is never stored. It is derived from
+    these dates on read, because a stored status is wrong the next morning.
+  */
+  documents: {
+    fitness: {
+      number: { type: String, trim: true },
+      expiresOn: { type: Date }
+    },
+    permit: {
+      number: { type: String, trim: true },
+      expiresOn: { type: Date }
+    },
+    insurance: {
+      number: { type: String, trim: true },
+      provider: { type: String, trim: true },
+      expiresOn: { type: Date }
+    },
+    puc: {
+      expiresOn: { type: Date }
+    },
+    roadTax: {
+      expiresOn: { type: Date }
+    }
   }
 }, { timestamps: true });
+
+// Vehicles are counted, moved and listed per client (assignedTo).
+vehicleSchema.index({ assignedTo: 1 });
 
 export default mongoose.model('Vehicle', vehicleSchema);

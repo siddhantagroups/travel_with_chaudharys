@@ -49,4 +49,8 @@ const bookingSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+// Seat lookups (route + travel date) and the newest-first admin list.
+bookingSchema.index({ route: 1, date: 1 });
+bookingSchema.index({ createdAt: -1 });
+
 export default mongoose.model('Booking', bookingSchema);

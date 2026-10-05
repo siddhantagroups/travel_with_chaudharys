@@ -18,7 +18,10 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['Outfit', 'Inter', 'sans-serif'],
+        // Self-hosted variable font (@fontsource-variable/outfit, imported in
+        // main.jsx). Inter was a fallback that never showed — Outfit covers
+        // every character — so it is no longer downloaded.
+        sans: ['"Outfit Variable"', 'Outfit', 'system-ui', '-apple-system', '"Segoe UI"', 'Roboto', 'sans-serif'],
       },
       backgroundImage: {
         'brand-gradient': 'linear-gradient(135deg, #103257 0%, #1a507c 100%)',

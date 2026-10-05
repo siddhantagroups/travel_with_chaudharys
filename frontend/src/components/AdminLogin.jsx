@@ -21,13 +21,14 @@ const GRANTED_MS = 1500;
 const STEP_AT = [1500, 2080, 2660];
 
 export default function AdminLogin({ apiBase, onLoginSuccess, onCancel }) {
-  const [config, setConfig] = useState(null); // { google, googleClientId, password }
+  const [config, setConfig] = useState(null); // { google, googleClientId, password, mfa }
   const [status, setStatus] = useState('checking'); // 'checking' | 'online' | 'offline'
   const [phase, setPhase] = useState('handshake'); // 'handshake' | 'ready' | 'failed'
   const [cleared, setCleared] = useState(0); // how many checks have passed
   const [failure, setFailure] = useState(null); // { step, reason }
   const [attempt, setAttempt] = useState(0);
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState(''); // 6-digit authenticator code, when two-factor is on
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [capsOn, setCapsOn] = useState(false);
@@ -155,7 +156,7 @@ export default function AdminLogin({ apiBase, onLoginSuccess, onCancel }) {
       const data = await res.json();
       if (res.ok) {
         setPhase('granted');
-        await onLoginSuccess(data.token, data.user, GRANTED_MS);
+        await onLoginSuccess(data.user, GRANTED_MS);
         return; // unmounted by now
       } else {
         setError(data.error || 'Google sign-in was refused.');
@@ -175,17 +176,18 @@ export default function AdminLogin({ apiBase, onLoginSuccess, onCancel }) {
       const res = await fetch(`${apiBase}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify(config?.mfa ? { password, code } : { password }),
       });
       const data = await res.json();
       if (res.ok) {
         setStatus('online');
         setPhase('granted');
-        await onLoginSuccess(data.token, data.user, GRANTED_MS);
+        await onLoginSuccess(data.user, GRANTED_MS);
         return; // the panel replaces this screen; nothing left to reset
       } else {
         setStatus('online');
         setError(data.error || 'That password doesn’t match. Try again.');
+        setCode('');
       }
     } catch (e) {
       setStatus('offline');
@@ -218,7 +220,7 @@ export default function AdminLogin({ apiBase, onLoginSuccess, onCancel }) {
 
   return (
     <>
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @keyframes gateRise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
         @keyframes gateFade { from { opacity: 0; } to { opacity: 1; } }
         @keyframes gatePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
@@ -243,7 +245,7 @@ export default function AdminLogin({ apiBase, onLoginSuccess, onCancel }) {
           .gate-track, .gate-mark, .confirm-ring, .confirm-tick { animation: none; }
           .gate-veil { transition: none; }
         }
-      `}</style>
+      ` }} />
 
       {/* Signing in — covers the gate so the dashboard doesn't snap into place.
           Stays up until App has the admin data loaded. */}
@@ -479,6 +481,31 @@ export default function AdminLogin({ apiBase, onLoginSuccess, onCancel }) {
                     <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.14em] text-amber-600">
                       Caps lock is on
                     </p>
+                  )}
+
+                  {/* Two-factor: the code from the authenticator app. */}
+                  {config?.mfa && (
+                    <>
+                      <label
+                        htmlFor="admin-code"
+                        className="mb-2 mt-4 block font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500"
+                      >
+                        Authenticator code
+                      </label>
+                      <input
+                        id="admin-code"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        pattern="[0-9]{6}"
+                        maxLength={6}
+                        required
+                        value={code}
+                        onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3 text-center font-mono text-[15px] font-bold tracking-[0.5em] text-slate-800 focus:border-brand-steel focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-steel/25"
+                        placeholder="000000"
+                      />
+                    </>
                   )}
 
                   <button

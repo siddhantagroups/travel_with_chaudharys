@@ -43,7 +43,7 @@ export default function ZingFeatures() {
 
   return (
     <>
-    <style>{`
+    <style dangerouslySetInnerHTML={{ __html: `
       /* Mobile: this section is pulled up over the hero so its background
          image fades in on top of the video, giving the same soft video ->
          image blend the laptop view gets from its bottom fade.
@@ -52,14 +52,17 @@ export default function ZingFeatures() {
          (240px) starts the fade over the video and the gradient reaches full
          opacity by 62px — well before the video's bottom edge — so the seam is
          covered and the heading below it sits on a solid background. */
+      /* AVIF where supported (39 KB), WebP otherwise (49 KB). */
       .features-bg {
+        background-image: linear-gradient(rgba(16,50,87,0.80), rgba(13,27,42,0.90)), url('/features-bg.webp');
+        background-image: linear-gradient(rgba(16,50,87,0.80), rgba(13,27,42,0.90)), image-set(url('/features-bg.avif') type('image/avif'), url('/features-bg.webp') type('image/webp'));
         -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 62px);
         mask-image: linear-gradient(to bottom, transparent 0, #000 62px);
       }
       @media (min-width: 640px) {
         .features-bg { -webkit-mask-image: none; mask-image: none; }
       }
-    `}</style>
+    ` }} />
     <section
       id="features"
       className="relative -mt-[240px] sm:mt-0 pt-[130px] sm:pt-8 pb-16 overflow-hidden"
@@ -67,7 +70,6 @@ export default function ZingFeatures() {
       {/* Background layer — masked so it eases in over the hero on mobile */}
       <div
         className="features-bg pointer-events-none absolute inset-0 bg-brand-navy bg-cover bg-center bg-fixed"
-        style={{ backgroundImage: "linear-gradient(rgba(16,50,87,0.80), rgba(13,27,42,0.90)), url('/p1.jpg')" }}
         aria-hidden="true"
       ></div>
 

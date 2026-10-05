@@ -1,8 +1,14 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Bus, Plus, Trash2, Edit2, Landmark, Users, Tag, Clock, MapPin, Eye, FileText, CheckCircle2, LogOut, Settings } from 'lucide-react';
 import FleetWorkspace from './FleetWorkspace';
 import ConfirmDialog from './ConfirmDialog';
 import Toasts from './Toasts';
+import ComplianceBoard, { statusOf } from './ComplianceBoard';
+import AccountsBoard from './AccountsBoard';
+import ClientsBoard from './ClientsBoard';
+import { assignmentLabel } from './assignmentLabels';
+
+const COMPLIANCE_DOCS = ['fitness', 'permit', 'insurance', 'puc', 'roadTax'];
 
 export default function AdminPanel({
   vehicles, routes, bookings, inquiries, clients = [],
@@ -11,10 +17,22 @@ export default function AdminPanel({
   onAddClient, onDeleteClient,
   onAddRoute, onUpdateRoute, onDeleteRoute,
   onUpdateInquiryStatus,
-  serviceConfig, onUpdateServiceConfig
+  serviceConfig, onUpdateServiceConfig,
+  adminSections = { routes: false, bookings: false }, onUpdateAdminSections,
+  apiBase, authFetch
 }) {
-  const [activeTab, setActiveTab] = useState('fleet'); // fleet, assignments, routes, bookings, contracts, settings
-  const [expandedGroup, setExpandedGroup] = useState(null); // Which school/corporate group is expanded
+  // Accounts is the first tab, so the panel opens on it.
+  const [activeTab, setActiveTab] = useState('accounts'); // accounts, fleet, compliance, assignments, contracts, routes, bookings, settings
+
+  // Route Manager and Seat Bookings only exist while switched on in Site
+  // Settings. If one is switched off while open, fall back to the fleet.
+  const showRoutes = Boolean(adminSections?.routes);
+  const showBookings = Boolean(adminSections?.bookings);
+  useEffect(() => {
+    if ((activeTab === 'routes' && !showRoutes) || (activeTab === 'bookings' && !showBookings)) {
+      setActiveTab('accounts');
+    }
+  }, [activeTab, showRoutes, showBookings]);
   
   // Modals / Form States
   const [showAddVehicle, setShowAddVehicle] = useState(false);
@@ -36,6 +54,32 @@ export default function AdminPanel({
     setToasts((list) => list.filter((t) => t.id !== id));
   }, []);
 
+  /*
+    Every vehicle's document dates. Feeds the count on the Documents tab (so
+    the owner sees trouble without opening it) and the documents card in My
+    Fleet. The compliance endpoint is admin-only, so it cannot ride along with
+    the public vehicle list the rest of the panel uses. Re-fetched when the
+    fleet grows or shrinks, and after any date is saved.
+  */
+  const [complianceList, setComplianceList] = useState(null);
+  const [docFocus, setDocFocus] = useState(null); // vehicle to open on the Documents tab
+
+  const refreshCompliance = useCallback(async () => {
+    if (!authFetch || !apiBase) return;
+    try {
+      const res = await authFetch(`${apiBase}/vehicles/compliance`);
+      if (!res?.ok) return;
+      setComplianceList(await res.json());
+    } catch { /* a nicety on top of the panel; never break it over this */ }
+  }, [apiBase, authFetch]);
+
+  useEffect(() => { refreshCompliance(); }, [refreshCompliance, vehicles.length]);
+
+  const complianceAlerts = (complianceList || []).reduce((acc, v) => acc + COMPLIANCE_DOCS.filter((k) => {
+    const id = statusOf(v.documents?.[k]?.expiresOn).id;
+    return id === 'expired' || id === 'urgent' || id === 'soon';
+  }).length, 0);
+
   // Runs a write handler and reports the outcome either way.
   const runWrite = async (promise, successTitle, successDetail, failTitle) => {
     const result = await promise;
@@ -48,10 +92,6 @@ export default function AdminPanel({
   };
   const [selectedInquiry, setSelectedInquiry] = useState(null);
   
-  // Reassignment Form State
-  const [reassigningVehicle, setReassigningVehicle] = useState(null);
-  const [newAssignment, setNewAssignment] = useState('');
-
   // New Vehicle Form State
   const [vModel, setVModel] = useState('');
   const [vPlate, setVPlate] = useState('');
@@ -83,9 +123,6 @@ export default function AdminPanel({
     ...[...new Set(orphaned)],
     'Maintenance'
   ];
-
-  // Helper to group vehicles by assignment
-  const getVehiclesByGroup = (group) => vehicles.filter(v => v.assignedTo === group);
 
   // Submits
   const handleAddVehicleSubmit = (e) => {
@@ -121,7 +158,7 @@ export default function AdminPanel({
     e.preventDefault();
     const vehicleId = rVehicle || (vehicles.find(v => v.assignedTo === 'Available for Public Booking')?._id);
     if (!vehicleId) {
-      setFormNotice('Mark at least one vehicle as “Available for Public Booking” first — an intercity route needs a bus to run on.');
+      setFormNotice('Put at least one vehicle on “Not on contract” first — an intercity route needs a free bus to run on.');
       return;
     }
     setFormNotice('');
@@ -195,7 +232,7 @@ export default function AdminPanel({
       title: count === 0 ? 'Remove this contract?' : `Remove contract and free ${count} vehicle${count === 1 ? '' : 's'}?`,
       message: count === 0
         ? 'They will no longer appear when assigning a vehicle.'
-        : `${count === 1 ? 'This bus' : `All ${count} buses`} will move to “Available for Public Booking”, where you can reassign ${count === 1 ? 'it' : 'them'}. This can’t be undone.`,
+        : `${count === 1 ? 'This bus' : `All ${count} buses`} will move to “Not on contract”, where you can reassign ${count === 1 ? 'it' : 'them'}. This can’t be undone.`,
       detail: {
         primary: groupName,
         secondary: count === 0
@@ -209,12 +246,11 @@ export default function AdminPanel({
           notify('Could not remove that contract', result?.error, 'error');
           return;
         }
-        if (expandedGroup === groupName) setExpandedGroup(null);
         notify(
           `${groupName} removed`,
           count === 0
             ? 'The contract is no longer listed.'
-            : `${count} vehicle${count === 1 ? '' : 's'} moved to Available for Public Booking.`
+            : `${count} vehicle${count === 1 ? '' : 's'} moved to Not on contract.`
         );
       },
     });
@@ -238,21 +274,6 @@ export default function AdminPanel({
     });
   };
 
-  const startReassignment = (vehicle) => {
-    setReassigningVehicle(vehicle);
-    setNewAssignment(vehicle.assignedTo);
-  };
-
-  const saveReassignment = () => {
-    runWrite(
-      onUpdateVehicle(reassigningVehicle._id, { ...reassigningVehicle, assignedTo: newAssignment }),
-      'Vehicle reassigned',
-      `${reassigningVehicle.plateNumber} now runs for ${newAssignment}.`,
-      'Could not reassign that vehicle'
-    );
-    setReassigningVehicle(null);
-  };
-
   // Filter Bookings by Vehicle plate
   const filteredBookings = bookingVehicleFilter === 'All'
     ? bookings
@@ -265,7 +286,8 @@ export default function AdminPanel({
 
   return (
     <div className="bg-slate-50 min-h-screen pt-20 sm:pt-24 pb-6 sm:pb-10 px-3 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
+      {/* Wide screens use more of the width, still with side margins. */}
+      <div className="max-w-screen-2xl mx-auto">
 
         {/* Header Title */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 md:gap-4 mb-4 sm:mb-6">
@@ -280,18 +302,21 @@ export default function AdminPanel({
           {/* Actions stay on one line at every width — they scroll sideways on
               a phone rather than stacking into a wall of buttons. */}
           <div className="flex w-full md:w-auto items-center gap-2 overflow-x-auto no-scrollbar -mx-3 px-3 md:mx-0 md:px-0">
-            <button
-              onClick={() => {
-                // Auto-set the first available vehicle
-                if (publicVehicles.length > 0) setRVehicle(publicVehicles[0]._id);
-                setShowAddRoute(true);
-              }}
-              className="shrink-0 flex items-center gap-1.5 px-3 sm:px-4 py-2.5 bg-brand-steel hover:bg-brand-navy text-white text-xs font-bold rounded-xl transition-all shadow-sm"
-            >
-              <Plus size={16} />
-              <span className="sm:hidden">Route</span>
-              <span className="hidden sm:inline">Add New Route</span>
-            </button>
+            {/* Routes are part of the Route Manager section — hidden with it. */}
+            {showRoutes && (
+              <button
+                onClick={() => {
+                  // Auto-set the first available vehicle
+                  if (publicVehicles.length > 0) setRVehicle(publicVehicles[0]._id);
+                  setShowAddRoute(true);
+                }}
+                className="shrink-0 flex items-center gap-1.5 px-3 sm:px-4 py-2.5 bg-brand-steel hover:bg-brand-navy text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+              >
+                <Plus size={16} />
+                <span className="sm:hidden">Route</span>
+                <span className="hidden sm:inline">Add New Route</span>
+              </button>
+            )}
             <button
               onClick={() => setShowAddVehicle(true)}
               className="shrink-0 flex items-center gap-1.5 px-3 sm:px-4 py-2.5 bg-brand-navy hover:bg-brand-steel text-white text-xs font-bold rounded-xl transition-all shadow-sm"
@@ -305,7 +330,7 @@ export default function AdminPanel({
               className="shrink-0 flex items-center gap-1.5 px-3 sm:px-4 py-2.5 bg-brand-navy hover:bg-brand-steel text-white text-xs font-bold rounded-xl transition-all shadow-sm"
             >
               <Plus size={16} />
-              <span className="sm:hidden">School</span>
+              <span className="sm:hidden">Client</span>
               <span className="hidden sm:inline">Add School / Company</span>
             </button>
             {/* Not an "add" action, so it reads as a neutral control rather than
@@ -342,19 +367,28 @@ export default function AdminPanel({
             rows on a phone. Short labels below sm, full labels above. */}
         <div className="flex mb-4 sm:mb-6 gap-1.5 sm:gap-2 bg-white p-1.5 sm:p-2 rounded-2xl shadow-sm border border-slate-200 overflow-x-auto no-scrollbar">
           {[
+            // Money in, money out, profit — month by month.
+            { id: 'accounts', short: 'Accounts', full: 'Accounts' },
             { id: 'fleet', short: 'Fleet', full: 'My Fleet' },
-            { id: 'assignments', short: 'Schools', full: 'Assignments by School' },
-            { id: 'routes', short: 'Routes', full: 'Route Manager' },
-            { id: 'bookings', short: 'Bookings', full: 'Seat Bookings' },
+            {
+              id: 'compliance',
+              short: `Documents${complianceAlerts ? ` (${complianceAlerts})` : ''}`,
+              full: `Vehicle Documents${complianceAlerts ? ` (${complianceAlerts} due)` : ''}`,
+            },
+            // Schools and companies alike — "Clients" covers both.
+            { id: 'assignments', short: 'Clients', full: 'Clients' },
             {
               id: 'contracts',
               short: `Inquiries${pendingInquiries ? ` (${pendingInquiries})` : ''}`,
-              full: `Contract Inquiries (${pendingInquiries} New)`,
+              full: `Contract Inquiries${pendingInquiries ? ` (${pendingInquiries} New)` : ''}`,
             },
+            // Optional sections, last, and only while switched on in Site Settings.
+            showRoutes && { id: 'routes', short: 'Routes', full: 'Route Manager' },
+            showBookings && { id: 'bookings', short: 'Bookings', full: 'Seat Bookings' },
             // Site Settings is reached from the header action row instead of
             // getting a tab here — it configures the site rather than being
             // another view of fleet data.
-          ].map((t) => (
+          ].filter(Boolean).map((t) => (
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id)}
@@ -381,138 +415,28 @@ export default function AdminPanel({
             onAddVehicle={onAddVehicle}
             onUpdateVehicle={onUpdateVehicle}
             onDeleteVehicle={onDeleteVehicle}
+            showRoutes={showRoutes}
+            showBookings={showBookings}
+            compliance={complianceList}
+            onOpenDocuments={(vehicleId) => { setDocFocus(vehicleId); setActiveTab('compliance'); }}
           />
         )}
 
         {/* ------------------ TAB CONTENT: FLEET ASSIGNMENTS GRID ------------------ */}
         {activeTab === 'assignments' && (
-          <div className="space-y-6">
-            <div className="bg-brand-light/30 border border-brand-silver/30 p-4 rounded-xl text-sm text-slate-700 font-semibold mb-2">
-              💡 Owner Info: Below is your current vehicle distribution. Click on any School or Company group card to view/reassign the specific vehicles present there.
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {assignments.map((group) => {
-                const groupVehicles = getVehiclesByGroup(group);
-                const isExpanded = expandedGroup === group;
-
-                return (
-                  <div 
-                    key={group} 
-                    className={`bg-white rounded-2xl border transition-all duration-300 ${
-                      isExpanded 
-                        ? 'border-brand-steel ring-2 ring-brand-steel/15 col-span-full' 
-                        : 'border-slate-100 hover:border-brand-steel/30 shadow-sm'
-                    }`}
-                  >
-                    {/* Group Card Header */}
-                    <div 
-                      onClick={() => setExpandedGroup(isExpanded ? null : group)}
-                      className="p-6 cursor-pointer flex justify-between items-center"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="p-3 bg-slate-100 text-brand-navy rounded-xl">
-                          {group.includes('School') ? <GraduationCap size={24} /> : <Landmark size={24} />}
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-slate-800 text-base">{group}</h4>
-                          <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">
-                            {groupVehicles.length} {groupVehicles.length === 1 ? 'Vehicle' : 'Vehicles'} Active
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-xs font-bold text-brand-steel hover:underline">
-                          {isExpanded ? 'Collapse' : 'Click to View'}
-                        </span>
-                        {/* Only real contracts can be removed — the two fixed
-                            states aren't clients. */}
-                        {clients.some(c => c.name === group) && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); askRemoveContract(group); }}
-                            title={`Remove ${group}`}
-                            aria-label={`Remove ${group}`}
-                            className="ml-1 p-2 rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-600 transition-colors"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Group Expanded list */}
-                    {isExpanded && (
-                      <div className="border-t border-slate-100 p-6 bg-slate-50/50">
-                        {groupVehicles.length === 0 ? (
-                          <p className="text-slate-400 font-bold text-sm text-center py-6">No vehicles currently assigned here.</p>
-                        ) : (
-                          <>
-                          {/* Phone: cards instead of a table inside the group */}
-                          <ul className="sm:hidden space-y-2">
-                            {groupVehicles.map(vehicle => (
-                              <li key={vehicle._id} className="rounded-xl bg-white border border-slate-100 p-3">
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <p className="font-mono text-sm font-bold text-brand-navy">{vehicle.plateNumber}</p>
-                                    <p className="text-[11px] font-semibold text-slate-500 truncate">
-                                      {vehicle.modelName} · {vehicle.capacity} seats
-                                    </p>
-                                  </div>
-                                  <button
-                                    onClick={() => startReassignment(vehicle)}
-                                    className="shrink-0 px-3 py-1.5 bg-brand-steel/10 hover:bg-brand-steel text-brand-steel hover:text-white rounded-lg text-[11px] font-bold transition-all"
-                                  >
-                                    Reassign
-                                  </button>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-
-                          <div className="hidden sm:block overflow-x-auto">
-                            <table className="w-full text-left text-sm border-collapse">
-                              <thead>
-                                <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-xs">
-                                  <th className="pb-3">Plate Number</th>
-                                  <th className="pb-3">Model</th>
-                                  <th className="pb-3">Type</th>
-                                  <th className="pb-3">Capacity</th>
-                                  <th className="pb-3 text-right">Actions</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-100">
-                                {groupVehicles.map(vehicle => (
-                                  <tr key={vehicle._id} className="hover:bg-slate-100/50 font-medium text-slate-700">
-                                    <td className="py-4 font-mono font-bold text-brand-navy">{vehicle.plateNumber}</td>
-                                    <td className="py-4">{vehicle.modelName}</td>
-                                    <td className="py-4">{vehicle.type}</td>
-                                    <td className="py-4">{vehicle.capacity} Seats</td>
-                                    <td className="py-4 text-right">
-                                      <button
-                                        onClick={() => startReassignment(vehicle)}
-                                        className="px-3 py-1.5 bg-brand-steel/10 hover:bg-brand-steel text-brand-steel hover:text-white rounded-lg text-xs font-bold transition-all"
-                                      >
-                                        Reassign Vehicle
-                                      </button>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <ClientsBoard
+            vehicles={vehicles}
+            clients={clients}
+            assignments={assignments}
+            onUpdateVehicle={onUpdateVehicle}
+            notify={notify}
+            onAddClient={() => { setShowClients(true); setCError(''); }}
+            onRemoveClient={askRemoveContract}
+          />
         )}
 
         {/* ------------------ TAB CONTENT: ROUTE MANAGER ------------------ */}
-        {activeTab === 'routes' && (
+        {activeTab === 'routes' && showRoutes && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 sm:p-6 border-b border-slate-100">
               <h3 className="font-bold text-base sm:text-lg text-brand-navy">Active Intercity Routes</h3>
@@ -588,8 +512,30 @@ export default function AdminPanel({
           </div>
         )}
 
+        {/* ------------------ TAB CONTENT: ACCOUNTS ------------------ */}
+        {activeTab === 'accounts' && (
+          <AccountsBoard
+            apiBase={apiBase}
+            authFetch={authFetch}
+            vehicles={vehicles}
+            clients={clients}
+          />
+        )}
+
+        {/* ------------------ TAB CONTENT: DOCUMENTS / COMPLIANCE ------------------ */}
+        {activeTab === 'compliance' && (
+          <ComplianceBoard
+            apiBase={apiBase}
+            authFetch={authFetch}
+            onChanged={refreshCompliance}
+            focusVehicleId={docFocus}
+            onFocusHandled={() => setDocFocus(null)}
+            fleets={assignments}
+          />
+        )}
+
         {/* ------------------ TAB CONTENT: SEAT BOOKINGS ------------------ */}
-        {activeTab === 'bookings' && (
+        {activeTab === 'bookings' && showBookings && (
           <div className="space-y-6">
             
             {/* Filter Selection Panel */}
@@ -784,6 +730,7 @@ export default function AdminPanel({
 
         {/* ------------------ TAB CONTENT: SITE SETTINGS ------------------ */}
         {activeTab === 'settings' && (
+          <div className="space-y-4 sm:space-y-6">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 sm:p-6 border-b border-slate-100">
               <h3 className="font-bold text-base sm:text-lg text-brand-navy">Service Availability</h3>
@@ -837,6 +784,43 @@ export default function AdminPanel({
                 );
               })}
             </div>
+          </div>
+
+          {/* Optional dashboard sections — each switched on and off on its own. */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 sm:p-6 border-b border-slate-100">
+              <h3 className="font-bold text-base sm:text-lg text-brand-navy">Dashboard Sections</h3>
+              <p className="text-xs text-slate-500 font-semibold mt-1">Show extra tabs in this dashboard only when you need them. Turning one off hides it — nothing is deleted.</p>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {[
+                { id: 'routes', label: 'Route Manager', hint: 'Intercity routes, timings and fares' },
+                { id: 'bookings', label: 'Seat Bookings', hint: 'Seats booked by passengers on the website' },
+              ].map((sec) => {
+                const on = Boolean(adminSections?.[sec.id]);
+                return (
+                  <div key={sec.id} className="p-4 sm:p-6 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-bold text-sm text-slate-800">{sec.label}</p>
+                      <p className="text-[11px] font-semibold text-slate-400 mt-0.5">
+                        {on ? 'Tab visible' : 'Tab hidden'} · {sec.hint}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={on}
+                      aria-label={`Show ${sec.label}`}
+                      onClick={() => onUpdateAdminSections?.({ [sec.id]: !on })}
+                      className={`relative w-12 h-7 rounded-full transition-colors duration-200 shrink-0 ${on ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${on ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
           </div>
         )}
 
@@ -1016,7 +1000,7 @@ export default function AdminPanel({
                 className="w-full p-2.5 border border-slate-200 rounded-xl font-bold text-slate-700"
               >
                 {assignments.map(a => (
-                  <option key={a} value={a}>{a}</option>
+                  <option key={a} value={a}>{assignmentLabel(a)}</option>
                 ))}
               </select>
             </div>
@@ -1239,45 +1223,6 @@ export default function AdminPanel({
         </div>
       )}
 
-      {/* ------------------ MODAL: REASSIGNMENT DROPDOWN ------------------ */}
-      {reassigningVehicle && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full border shadow-xl animate-fade-in space-y-4">
-            <h3 className="font-extrabold text-lg text-brand-navy">Reassign Vehicle</h3>
-            <p className="text-xs font-semibold text-slate-400">
-              Set deployment assignment for <span className="font-bold font-mono text-slate-700">{reassigningVehicle.plateNumber}</span> ({reassigningVehicle.modelName}).
-            </p>
-            
-            <select
-              value={newAssignment}
-              onChange={(e) => setNewAssignment(e.target.value)}
-              className="w-full p-3 border border-slate-200 rounded-xl font-bold text-slate-700 bg-slate-50"
-            >
-              {assignments.map(a => (
-                <option key={a} value={a}>{a}</option>
-              ))}
-            </select>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setReassigningVehicle(null)}
-                className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={saveReassignment}
-                className="px-5 py-2 bg-brand-navy hover:bg-brand-steel text-white rounded-xl text-xs font-bold shadow-sm"
-              >
-                Save Assignment
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <ConfirmDialog
         open={!!confirmAction}
         title={confirmAction?.title}
@@ -1298,27 +1243,7 @@ export default function AdminPanel({
   );
 }
 
-// Simple placeholder icons since we aren't importing everything from lucide
-function GraduationCap(props) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z" />
-      <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5" />
-    </svg>
-  );
-}
-
+// Simple placeholder icon since we aren't importing everything from lucide
 function X(props) {
   return (
     <svg

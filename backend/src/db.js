@@ -6,6 +6,10 @@ const connectDB = async () => {
 
   const options = {
     serverSelectionTimeoutMS: 2000, // Timeout fast for diagnostic fallback
+    // One pool of connections reused by every request. A single small API on
+    // the same machine as MongoDB never needs the driver's default of 100.
+    maxPoolSize: 20,
+    minPoolSize: 2,
   };
 
   try {

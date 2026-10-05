@@ -8,6 +8,16 @@ import ContractInquiry from './models/ContractInquiry.js';
 
 dotenv.config();
 
+// This script DELETES every vehicle, route, booking and enquiry, then inserts
+// sample data. Run against the live database by mistake it would wipe the
+// owner's real records, so it refuses unless explicitly confirmed, and never
+// runs where NODE_ENV=production.
+if (process.env.NODE_ENV === 'production' || process.env.SEED_CONFIRM !== 'wipe-all-data') {
+  console.error('Refusing to run: this deletes all vehicles, routes, bookings and enquiries.');
+  console.error('For a local development database only:  SEED_CONFIRM=wipe-all-data npm run seed');
+  process.exit(1);
+}
+
 const seedData = async () => {
   try {
     // Connect to DB

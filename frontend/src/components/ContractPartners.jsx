@@ -1,5 +1,6 @@
 import React from 'react';
 import { GraduationCap, Building2, ArrowRight } from 'lucide-react';
+import LazyImage from './LazyImage';
 
 export default function ContractPartners({ onOpenAbout }) {
   const partners = [
@@ -30,11 +31,11 @@ export default function ContractPartners({ onOpenAbout }) {
   ];
 
   const fleetImages = [
-    { src: "/fleet-1.jpg", alt: "Shemford Public School Pinjore — dedicated fleet of school buses" },
-    { src: "/fleet-2.jpg", alt: "Shemford Public School bus — close-up" },
-    { src: "/fleet-3.jpg", alt: "Eicher School bus on route in Parwanoo" },
-    { src: "/fleet-4.jpg", alt: "School bus fleet lined up and ready for dispatch" },
-    { src: "/fleet-5.jpg", alt: "Chitkara University — full fleet of campus transport buses" },
+    { src: "/fleet-1.webp", alt: "Shemford Public School Pinjore — dedicated fleet of school buses" },
+    { src: "/fleet-2.webp", alt: "Shemford Public School bus — close-up" },
+    { src: "/fleet-3.webp", alt: "Eicher School bus on route in Parwanoo" },
+    { src: "/fleet-4.webp", alt: "School bus fleet lined up and ready for dispatch" },
+    { src: "/fleet-5.webp", alt: "Chitkara University — full fleet of campus transport buses" },
   ];
 
   const stats = [
@@ -50,7 +51,7 @@ export default function ContractPartners({ onOpenAbout }) {
   };
 
   return (
-    <section id="contracts" className="py-10 sm:py-14 bg-slate-50 border-y border-slate-200/70">
+    <section id="contracts" className="defer-render py-10 sm:py-14 bg-slate-50 border-y border-slate-200/70">
       <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
 
         {/* Header Block */}
@@ -115,10 +116,9 @@ export default function ContractPartners({ onOpenAbout }) {
                 className="relative overflow-hidden rounded-xl sm:rounded-lg group shadow-md shadow-slate-900/10 text-left cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-steel focus-visible:ring-offset-2"
               >
                 <div className="aspect-[16/10] sm:aspect-[16/9]">
-                  <img
+                  <LazyImage
                     src={img.src}
                     alt={img.alt}
-                    loading="lazy"
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                   />
                 </div>
@@ -137,10 +137,9 @@ export default function ContractPartners({ onOpenAbout }) {
                 className={`relative overflow-hidden rounded-xl sm:rounded-lg group shadow-md shadow-slate-900/10 text-left cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-steel focus-visible:ring-offset-2 ${idx === 2 ? 'col-span-2 sm:col-span-1' : ''}`}
               >
                 <div className="aspect-[16/10] sm:aspect-[16/9]">
-                  <img
+                  <LazyImage
                     src={img.src}
                     alt={img.alt}
-                    loading="lazy"
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                   />
                 </div>

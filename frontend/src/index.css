@@ -102,3 +102,11 @@
 .mmt-shadow {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
 }
+
+/* Sections below the first screen: the browser skips their style, layout and
+   paint until they are about to scroll into view. The height is a placeholder
+   until first shown; "auto" then remembers the real one. */
+.defer-render {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 900px;
+}

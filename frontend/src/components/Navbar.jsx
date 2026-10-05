@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Bus, Building2, ArrowRight, Users } from 'lucide-react';
 
-// Pull the About hero video into cache the moment someone shows intent (hover,
+// Pull the About page (its code and hero video) into cache the moment someone shows intent (hover,
 // focus or touch on the About link) rather than when the page mounts. By the
 // time the view switches the file is usually already there, so the hero plays
 // immediately instead of streaming in. Fires once per page load.
@@ -16,6 +16,8 @@ function warmAboutHero() {
     link.href = '/about-hero.mp4';
     document.head.appendChild(link);
   } catch (e) { /* non-critical */ }
+  // The About page's own code is split out of the main bundle; fetch it now too.
+  import('./AboutPage').catch(() => { /* fetched again on click */ });
 }
 
 export default function Navbar({ currentView, setCurrentView, activeService, setActiveService }) {
@@ -51,12 +53,20 @@ export default function Navbar({ currentView, setCurrentView, activeService, set
   // it. The About hero is a bright sky, where white would vanish — so that view
   // gets the dark treatment from the start.
   const onLightHero = currentView === 'about';
-  const darkText = isScrolled || onLightHero;
+  // The owner dashboard has no hero at all: a plain light page. The bar is
+  // solid white with dark text there from the start, and it spans the same
+  // width as the dashboard below it so the edges line up (the dashboard is
+  // 1536px wide inside 32px side padding; this bar's padding sits inside it).
+  const isAdmin = currentView === 'admin';
+  const solid = isScrolled || isAdmin;
+  const darkText = solid || onLightHero;
 
   return (
     <div
       className={`left-0 w-full z-50 transition-all duration-300 ${
-        isScrolled
+        isAdmin
+          ? 'fixed top-0 bg-white/95 backdrop-blur-md shadow-sm border-b border-slate-200/80 py-1.5 sm:py-2'
+          : isScrolled
           ? 'fixed top-0 bg-white/95 backdrop-blur-md shadow-sm border-b border-slate-200/80 py-1'
           : onLightHero
             ? 'absolute top-0 bg-white/55 backdrop-blur-md border-b border-slate-200/50 py-1.5 sm:py-2'
@@ -65,7 +75,7 @@ export default function Navbar({ currentView, setCurrentView, activeService, set
     >
       {/* gap guarantees clearance between the brand block and the nav buttons —
           justify-between alone lets them meet flush on narrow phones */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex justify-between items-center gap-3 sm:gap-4 text-slate-800">
+      <div className={`${isAdmin ? 'max-w-[1600px]' : 'max-w-7xl'} mx-auto px-3 sm:px-6 lg:px-8 flex justify-between items-center gap-3 sm:gap-4 text-slate-800`}>
 
         {/* Logo & Brand Name */}
         <div
@@ -78,8 +88,11 @@ export default function Navbar({ currentView, setCurrentView, activeService, set
         >
           <div className="relative overflow-hidden h-8 w-8 min-[400px]:h-9 min-[400px]:w-9 sm:h-12 sm:w-12 flex items-center justify-center bg-transparent shrink-0">
             <img
-              src="/logoo.png"
+              src="/logo-96.webp"
               alt="Travel With Chaudharys"
+              width="96"
+              height="96"
+              decoding="async"
               className="h-full w-full object-contain transform translate-y-[2px]"
               onError={(e) => {
                 e.target.style.display = 'none';
@@ -102,6 +115,10 @@ export default function Navbar({ currentView, setCurrentView, activeService, set
             twice the others even though the flex spacing was equal. */}
         <div className="flex items-center gap-3 sm:gap-5">
 
+          {/* The owner dashboard is a secure page: its only way out is
+              Go to Website — no About or Book a Bus links from there. */}
+          {!isAdmin && (
+            <>
           {/* Secondary: About (hidden on small mobile) */}
           <button
             onMouseEnter={warmAboutHero}
@@ -147,6 +164,8 @@ export default function Navbar({ currentView, setCurrentView, activeService, set
             className={`hidden sm:block h-6 w-px -mx-2 ${darkText ? 'bg-slate-200' : 'bg-white/25'}`}
             aria-hidden="true"
           ></span>
+            </>
+          )}
 
           {/* Primary CTA — Fleet Contracts */}
           {currentView === 'admin' ? (
@@ -155,14 +174,14 @@ export default function Navbar({ currentView, setCurrentView, activeService, set
                 setCurrentView('public');
                 setActiveService('contracts');
               }}
-              className={`flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2 rounded-full font-bold text-[11px] sm:text-[12px] transition-all hover:-translate-y-0.5 ${
-                isScrolled
+              className={`flex shrink-0 items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2 rounded-full font-bold text-[11px] sm:text-[12px] transition-all hover:-translate-y-0.5 ${
+                solid
                   ? 'bg-brand-gradient text-white shadow-md shadow-brand-navy/25 hover:shadow-lg'
                   : 'bg-white text-brand-navy shadow-md shadow-black/10 hover:shadow-lg'
               }`}
             >
-              <User size={13} />
-              <span>Go to Website</span>
+              <User size={13} className="shrink-0" />
+              <span className="whitespace-nowrap">Go to Website</span>
             </button>
           ) : (
             <button
