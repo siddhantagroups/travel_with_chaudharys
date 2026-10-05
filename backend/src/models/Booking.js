@@ -46,7 +46,12 @@ const bookingSchema = new mongoose.Schema({
   amountPaid: {
     type: Number,
     required: true
-  }
+  },
+
+  // The sample booking from before the site went live. Set by
+  // scripts/live-data.js, never through the API; hidden from the dashboard
+  // unless "Show sample data" is on in Site Settings.
+  sample: { type: Boolean },
 }, { timestamps: true });
 
 // Seat lookups (route + travel date) and the newest-first admin list.

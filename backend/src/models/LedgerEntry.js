@@ -49,6 +49,11 @@ const ledgerEntrySchema = new mongoose.Schema({
   fleet: { type: String, trim: true, maxlength: 120, default: '' },
 
   note: { type: String, trim: true, maxlength: 200, default: '' },
+
+  // A line from the sample accounts (scripts/live-data.js add-sample-accounts),
+  // never set through the API; hidden from the dashboard unless "Show sample
+  // data" is on in Site Settings.
+  sample: { type: Boolean },
 }, { timestamps: true });
 
 // The Accounts tab reads entries by date range, newest first (date, then entry time).

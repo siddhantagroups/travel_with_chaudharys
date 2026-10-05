@@ -163,8 +163,22 @@ let siteSettings = {
   sections: {
     routes:   false,
     bookings: false,
+    // Sample records (marked sample: true) stay out of the dashboard unless
+    // this is on. Never affects the public site: the rental section still
+    // lists the sample vehicles. Admin-only — not sent to visitors.
+    sampleData: false,
   }
 };
+
+// Filters for the dashboard's lists while sample data is switched off.
+const hideSamples = () => !siteSettings.sections.sampleData;
+const NOT_SAMPLE = { sample: { $ne: true } };
+const sampleFilter = () => (hideSamples() ? NOT_SAMPLE : {});
+const dropSamples = (list) => (hideSamples() ? list.filter((x) => !x.sample) : list);
+
+// What visitors may see of a vehicle: no compliance documents, and no hint
+// of which vehicles are samples.
+const PUBLIC_VEHICLE_FIELDS = '-documents -sample';
 
 // Mock In-Memory Databases (pre-populated)
 let mockVehicles = [];
@@ -205,11 +219,17 @@ const devDocuments = (index) => {
 const devLedger = () => sampleLedger((id) => ({
   vehicle: id,
   vehiclePlate: mockVehicles.find((v) => v._id === id)?.plateNumber || '',
-})).map((e, idx) => ({ _id: `l${idx + 1}`, createdAt: e.date, ...e }));
+})).map((e, idx) => ({ _id: `l${idx + 1}`, createdAt: e.date, ...e, sample: true }));
 
 const seedMockData = () => {
   // Mock records need a stable synthetic id; MongoDB assigns its own _id.
-  mockVehicles = VEHICLE_SEED.map((v, i) => ({ _id: `v${i + 1}`, ...v, documents: devDocuments(i) }));
+  // Marked like the live site's data: there the school and company samples
+  // were replaced by real buses, and only the rental vehicles (kept for the
+  // home page), the accounts, the booking and the enquiries are samples.
+  mockVehicles = VEHICLE_SEED.map((v, i) => ({
+    _id: `v${i + 1}`, ...v, documents: devDocuments(i),
+    ...(v.assignedTo === 'Available for Public Booking' ? { sample: true } : {}),
+  }));
   mockLedger = devLedger();
 
   mockRoutes = [
@@ -235,7 +255,8 @@ const seedMockData = () => {
       passengerPhone: '+91 9876543210',
       paymentId: 'pay_MOCK123456',
       paymentStatus: 'Paid',
-      amountPaid: 1700
+      amountPaid: 1700,
+      sample: true
     }
   ];
 
@@ -250,7 +271,8 @@ const seedMockData = () => {
       vehicleType: 'School Bus',
       routeDescription: 'Daily student pickup from Kalka, Pinjor, and DAV campus.',
       status: 'Approved',
-      notes: 'Active contract.'
+      notes: 'Active contract.',
+      sample: true
     },
     {
       _id: 'i2',
@@ -262,7 +284,8 @@ const seedMockData = () => {
       vehicleType: 'Mini Bus',
       routeDescription: 'Employee shift pickups and drops between Baddi, Pinjor, and Parwanoo factory.',
       status: 'Approved',
-      notes: 'Active contract.'
+      notes: 'Active contract.',
+      sample: true
     }
   ];
 };
@@ -297,6 +320,7 @@ const publicVehicle = (v) => {
   if (!v) return v;
   const obj = typeof v.toObject === 'function' ? v.toObject() : { ...v };
   delete obj.documents;
+  delete obj.sample;
   return obj;
 };
 
@@ -356,7 +380,9 @@ const cleanRouteInput = async (body = {}) => {
 
 // Site settings â€” public read, admin write
 app.get('/api/settings', (req, res) => {
-  res.json(siteSettings);
+  if (readAdmin(req)) return res.json(siteSettings);
+  const { sampleData, ...sections } = siteSettings.sections;
+  res.json({ ...siteSettings, sections });
 });
 
 app.put('/api/settings', requireAdmin, (req, res) => {
@@ -370,7 +396,7 @@ app.put('/api/settings', requireAdmin, (req, res) => {
     }
   }
   if (sections) {
-    for (const key of ['routes', 'bookings']) {
+    for (const key of ['routes', 'bookings', 'sampleData']) {
       if (typeof sections[key] === 'boolean') siteSettings.sections[key] = sections[key];
     }
   }
@@ -425,13 +451,18 @@ app.get('/api/vehicles', async (req, res) => {
     // Document expiry dates and certificate numbers are internal compliance
     // records and must never be served here. The admin panel reads them from
     // /api/vehicles/compliance, which is behind requireAdmin.
+    // A signed-in admin also gets each vehicle's sample flag, so the dashboard
+    // can leave samples out while the public sections keep listing them.
+    const admin = !!readAdmin(req);
     if (process.env.USE_MOCK_DB === 'true') {
       const list = [...mockVehicles]
         .sort((a, b) => a.plateNumber.localeCompare(b.plateNumber))
-        .map(({ documents, ...pub }) => pub);
+        .map(({ documents, sample, ...pub }) => (admin && sample ? { ...pub, sample } : pub));
       return res.json(list);
     }
-    const vehicles = await cached('vehicles', () => Vehicle.find().select('-documents').sort({ plateNumber: 1 }).lean());
+    const vehicles = admin
+      ? await Vehicle.find().select('-documents').sort({ plateNumber: 1 }).lean()
+      : await cached('vehicles', () => Vehicle.find().select(PUBLIC_VEHICLE_FIELDS).sort({ plateNumber: 1 }).lean());
     res.json(vehicles);
   } catch (err) {
     sendError(res, err);
@@ -447,7 +478,7 @@ const DOC_KEYS = ['fitness', 'permit', 'insurance', 'puc', 'roadTax'];
 app.get('/api/vehicles/compliance', requireAdmin, async (req, res) => {
   try {
     if (process.env.USE_MOCK_DB === 'true') {
-      const list = [...mockVehicles]
+      const list = dropSamples([...mockVehicles])
         .sort((a, b) => a.plateNumber.localeCompare(b.plateNumber))
         .map((v) => ({
           _id: v._id,
@@ -459,7 +490,7 @@ app.get('/api/vehicles/compliance', requireAdmin, async (req, res) => {
         }));
       return res.json(list);
     }
-    const vehicles = await Vehicle.find()
+    const vehicles = await Vehicle.find(sampleFilter())
       .select('plateNumber modelName type assignedTo documents')
       .sort({ plateNumber: 1 })
       .lean();
@@ -754,7 +785,7 @@ app.get('/api/ledger', requireAdmin, async (req, res) => {
     const to = DATE_ONLY.test(String(req.query.to || '')) ? new Date(`${req.query.to}T23:59:59.999Z`) : null;
 
     if (process.env.USE_MOCK_DB === 'true') {
-      const list = mockLedger
+      const list = dropSamples(mockLedger)
         .filter((e) => (!from || new Date(e.date) >= from) && (!to || new Date(e.date) <= to))
         .sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt).localeCompare(String(a.createdAt)));
       return res.json(list);
@@ -763,7 +794,8 @@ app.get('/api/ledger', requireAdmin, async (req, res) => {
     const range = {};
     if (from) range.$gte = from;
     if (to) range.$lte = to;
-    const entries = await LedgerEntry.find(from || to ? { date: range } : {}).sort({ date: -1, createdAt: -1 }).lean();
+    const entries = await LedgerEntry.find({ ...(from || to ? { date: range } : {}), ...sampleFilter() })
+      .sort({ date: -1, createdAt: -1 }).lean();
     res.json(entries);
   } catch (err) {
     sendError(res, err);
@@ -840,7 +872,7 @@ app.get('/api/routes', async (req, res) => {
       const populated = mockRoutes.map(populateMockRoute);
       return res.json(populated);
     }
-    const routes = await cached('routes', () => Route.find().populate('vehicle', '-documents').sort({ createdAt: -1 }).lean());
+    const routes = await cached('routes', () => Route.find().populate('vehicle', PUBLIC_VEHICLE_FIELDS).sort({ createdAt: -1 }).lean());
     res.json(routes);
   } catch (err) {
     sendError(res, err);
@@ -861,7 +893,7 @@ app.post('/api/routes', requireAdmin, async (req, res) => {
     }
     const newRoute = new Route(values);
     await newRoute.save();
-    const populatedRoute = await Route.findById(newRoute._id).populate('vehicle', '-documents');
+    const populatedRoute = await Route.findById(newRoute._id).populate('vehicle', PUBLIC_VEHICLE_FIELDS);
     res.status(201).json(populatedRoute);
   } catch (err) {
     sendError(res, err);
@@ -883,7 +915,7 @@ app.put('/api/routes/:id', requireAdmin, async (req, res) => {
       req.params.id,
       values,
       { new: true, runValidators: true }
-    ).populate('vehicle', '-documents');
+    ).populate('vehicle', PUBLIC_VEHICLE_FIELDS);
     if (!updatedRoute) return res.status(404).json({ error: 'Route not found' });
     res.json(updatedRoute);
   } catch (err) {
@@ -913,10 +945,10 @@ app.delete('/api/routes/:id', requireAdmin, async (req, res) => {
 app.get('/api/bookings', requireAdmin, async (req, res) => {
   try {
     if (process.env.USE_MOCK_DB === 'true') {
-      const populated = mockBookings.map(populateMockBooking);
+      const populated = dropSamples(mockBookings).map(populateMockBooking);
       return res.json(populated);
     }
-    const bookings = await Booking.find()
+    const bookings = await Booking.find(sampleFilter())
       .populate({
         path: 'route',
         populate: { path: 'vehicle', select: 'plateNumber modelName type capacity assignedTo' }
@@ -1014,7 +1046,7 @@ app.post('/api/bookings', writeLimiter, async (req, res) => {
     await booking.save();
     const populatedBooking = await Booking.findById(booking._id).populate({
       path: 'route',
-      populate: { path: 'vehicle', select: '-documents' }
+      populate: { path: 'vehicle', select: PUBLIC_VEHICLE_FIELDS }
     });
     res.status(201).json(populatedBooking);
   } catch (err) {
@@ -1027,9 +1059,9 @@ app.post('/api/bookings', writeLimiter, async (req, res) => {
 app.get('/api/inquiries', requireAdmin, async (req, res) => {
   try {
     if (process.env.USE_MOCK_DB === 'true') {
-      return res.json(mockInquiries);
+      return res.json(dropSamples(mockInquiries));
     }
-    const inquiries = await ContractInquiry.find().sort({ createdAt: -1 }).lean();
+    const inquiries = await ContractInquiry.find(sampleFilter()).sort({ createdAt: -1 }).lean();
     res.json(inquiries);
   } catch (err) {
     sendError(res, err);

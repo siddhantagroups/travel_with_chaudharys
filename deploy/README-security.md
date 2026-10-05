@@ -19,22 +19,26 @@ copies of every file plus `dist/app.html`. Until step 3's Nginx config is in
 place everything still works, but /admin and /about briefly show the home
 page before switching, and files are sent uncompressed.
 
-## 1b. Clear the sample fleet, add sample accounts (for showing the owner)
+## 1b. Sample data
 
-Run after step 1, from `~/twc/backend`. Back up first (step 4, or
-`mongodump --out ~/backup-before-cleanup`).
+Records left from before the real data went in are marked as samples. The
+dashboard hides them unless **Site Settings → Show sample data** is on (it
+starts off after every API restart); the website's rental section still lists
+the sample vehicles. Run from `~/twc/backend`, after a backup (step 4, or
+`mongodump --out ~/backup-before-cleanup`):
 
 ```bash
-npm run live-data -- status                  # what is there now
-npm run live-data -- clear-vehicles          # lists the vehicles it would delete
-npm run live-data -- clear-vehicles --yes    # deletes them (clients and accounts stay)
-npm run live-data -- add-sample-accounts     # six months of sample accounts
+npm run live-data -- status                        # real and sample counts
+npm run live-data -- mark-samples                  # mark what the first version of the site put in
+npm run live-data -- mark-sample inquiry <id>      # mark one more record (vehicle, inquiry or booking)
+npm run live-data -- unmark-sample inquiry <id>    # treat it as real again
+npm run live-data -- add-sample-accounts           # six months of sample accounts
+npm run live-data -- remove-sample-accounts        # only those sample lines go
+npm run live-data -- clear-sample-vehicles         # lists the sample vehicles; add --yes to delete them
 pm2 restart twc-api
 ```
 
-When the owner starts entering his own accounts:
-`npm run live-data -- remove-sample-accounts` then `pm2 restart twc-api`.
-It removes only the sample lines, never ones entered in the admin panel.
+Nothing here touches a record entered in the admin panel.
 
 ## 2. backend/.env
 

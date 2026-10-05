@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Bus, Plus, Trash2, Edit2, Landmark, Users, Tag, Clock, MapPin, Eye, FileText, CheckCircle2, LogOut, Settings } from 'lucide-react';
 import FleetWorkspace from './FleetWorkspace';
 import ConfirmDialog from './ConfirmDialog';
@@ -11,7 +11,7 @@ import { assignmentLabel } from './assignmentLabels';
 const COMPLIANCE_DOCS = ['fitness', 'permit', 'insurance', 'puc', 'roadTax'];
 
 export default function AdminPanel({
-  vehicles, routes, bookings, inquiries, clients = [],
+  vehicles: allVehicles, routes, bookings, inquiries, clients = [],
   adminUser, onLogout,
   onAddVehicle, onUpdateVehicle, onDeleteVehicle,
   onAddClient, onDeleteClient,
@@ -21,6 +21,16 @@ export default function AdminPanel({
   adminSections = { routes: false, bookings: false }, onUpdateAdminSections,
   apiBase, authFetch
 }) {
+  // Sample records stay out of the dashboard unless "Show sample data" is on
+  // in Site Settings. The server already leaves them out of documents,
+  // accounts, bookings and enquiries; the vehicle list is the public one (the
+  // website's rental section keeps showing the samples), so it's done here.
+  const showSamples = Boolean(adminSections?.sampleData);
+  const vehicles = useMemo(
+    () => (showSamples ? allVehicles : allVehicles.filter((v) => !v.sample)),
+    [allVehicles, showSamples]
+  );
+
   // Accounts is the first tab, so the panel opens on it.
   const [activeTab, setActiveTab] = useState('accounts'); // accounts, fleet, compliance, assignments, contracts, routes, bookings, settings
 
@@ -73,7 +83,7 @@ export default function AdminPanel({
     } catch { /* a nicety on top of the panel; never break it over this */ }
   }, [apiBase, authFetch]);
 
-  useEffect(() => { refreshCompliance(); }, [refreshCompliance, vehicles.length]);
+  useEffect(() => { refreshCompliance(); }, [refreshCompliance, vehicles.length, showSamples]);
 
   const complianceAlerts = (complianceList || []).reduce((acc, v) => acc + COMPLIANCE_DOCS.filter((k) => {
     const id = statusOf(v.documents?.[k]?.expiresOn).id;
@@ -819,6 +829,32 @@ export default function AdminPanel({
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Sample data — example records from before the real data went in. */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 sm:p-6 border-b border-slate-100">
+              <h3 className="font-bold text-base sm:text-lg text-brand-navy">Sample Data</h3>
+              <p className="text-xs text-slate-500 font-semibold mt-1">Example vehicles, accounts and enquiries from before your real data went in. Hiding them deletes nothing, and website visitors still see the rental vehicles.</p>
+            </div>
+            <div className="p-4 sm:p-6 flex items-center justify-between gap-4">
+              <div>
+                <p className="font-bold text-sm text-slate-800">Show sample data</p>
+                <p className="text-[11px] font-semibold text-slate-400 mt-0.5">
+                  {showSamples ? 'Shown in every tab of this dashboard' : 'Hidden · the dashboard shows only your own records'}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={showSamples}
+                aria-label="Show sample data"
+                onClick={() => onUpdateAdminSections?.({ sampleData: !showSamples })}
+                className={`relative w-12 h-7 rounded-full transition-colors duration-200 shrink-0 ${showSamples ? 'bg-emerald-500' : 'bg-slate-300'}`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${showSamples ? 'translate-x-5' : 'translate-x-0'}`} />
+              </button>
             </div>
           </div>
           </div>

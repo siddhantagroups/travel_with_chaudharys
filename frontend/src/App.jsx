@@ -267,17 +267,28 @@ export default function App() {
   };
 
   // Admin-only data — requires a valid session. Clients are fetched again
-  // because the public list leaves out contact people and phone numbers.
+  // because the public list leaves out contact people and phone numbers;
+  // vehicles and settings because only a signed-in admin is told which
+  // vehicles are samples and whether the dashboard shows them. The sign-in
+  // waits for all of this, so samples never flash up in the dashboard.
   const fetchAdminData = async () => {
     try {
-      const [bRes, iRes, cRes] = await Promise.all([
+      const [bRes, iRes, cRes, vRes, sRes] = await Promise.all([
         authFetch(`${API_BASE}/bookings`),
         authFetch(`${API_BASE}/inquiries`),
         authFetch(`${API_BASE}/clients`),
+        authFetch(`${API_BASE}/vehicles`),
+        authFetch(`${API_BASE}/settings`),
       ]);
       if (bRes.ok) setBookings(await bRes.json());
       if (iRes.ok) setInquiries(await iRes.json());
       if (cRes.ok) setClients(await cRes.json());
+      if (vRes.ok) setVehicles(await vRes.json());
+      if (sRes.ok) {
+        const settings = await sRes.json();
+        if (settings.services) setServiceConfig(settings.services);
+        if (settings.sections) setAdminSections(settings.sections);
+      }
     } catch (err) {
       console.error('Error fetching admin data:', err);
     }
@@ -840,6 +851,8 @@ export default function App() {
                 if (res.ok) {
                   const data = await res.json();
                   if (data.sections) setAdminSections(data.sections);
+                  // The server filters bookings and enquiries by this switch.
+                  if ('sampleData' in changes) fetchAdminData();
                 }
               } catch (err) {
                 console.error('Failed to update admin sections:', err);

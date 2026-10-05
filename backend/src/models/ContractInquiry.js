@@ -46,7 +46,12 @@ const contractInquirySchema = new mongoose.Schema({
   notes: {
     type: String,
     trim: true
-  }
+  },
+
+  // A sample or test enquiry from before the site went live. Set by
+  // scripts/live-data.js, never through the API; hidden from the dashboard
+  // unless "Show sample data" is on in Site Settings.
+  sample: { type: Boolean },
 }, { timestamps: true });
 
 // The admin list is newest first.

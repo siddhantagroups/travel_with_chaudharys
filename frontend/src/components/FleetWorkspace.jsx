@@ -9,7 +9,7 @@ import { DOCS, DocTile } from './ComplianceBoard';
 import PlateBadge from './PlateBadge';
 import FilterButton from './FilterButton';
 
-import { PUBLIC, MAINTENANCE, assignmentLabel } from './assignmentLabels';
+import { PUBLIC, MAINTENANCE, assignmentLabel, byContractFirst } from './assignmentLabels';
 
 // Must stay within the enum on the Vehicle model, or saves fail validation.
 const VEHICLE_TYPES = ['School Bus', 'Mini Bus', 'Seater Bus', 'AC Coach', 'Tempo Traveller', 'Luxury SUV / Cab'];
@@ -86,7 +86,7 @@ export default function FleetWorkspace({
         String(v.type || '').toLowerCase().includes(qLower) ||
         String(v.assignedTo || '').toLowerCase().includes(qLower)
       );
-    });
+    }).sort(byContractFirst);
   }, [vehicles, query, filter]);
 
   const selected = vehicles.find((v) => v._id === selectedId) || null;

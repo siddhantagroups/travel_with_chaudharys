@@ -6,7 +6,7 @@ import {
 import PlateBadge from './PlateBadge';
 import FilterButton from './FilterButton';
 import { Sheet, SheetHeader } from './Sheet';
-import { assignmentLabel } from './assignmentLabels';
+import { assignmentLabel, byContractFirst } from './assignmentLabels';
 // Document list and expiry rules live in docStatus.js (small, shared with the
 // dashboard's tab badge); re-exported here for existing imports.
 import { DOCS, WINDOW, daysUntil, statusOf } from './docStatus';
@@ -437,16 +437,16 @@ export default function ComplianceBoard({ apiBase, authFetch, onChanged, focusVe
   }, [vehicles]);
 
   const results = useMemo(() => {
-    const inFleet = fleet === 'All' ? vehicles : vehicles.filter((v) => v.assignedTo === fleet);
+    const inFleet = vehicles.filter((v) => fleet === 'All' || v.assignedTo === fleet);
     const q = query.trim().toLowerCase();
-    if (!q) return inFleet;
     // Plates get typed with and without spaces/dashes — match on the bare characters.
     const bare = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const qBare = bare(q);
-    return inFleet.filter((v) =>
+    const found = !q ? inFleet : inFleet.filter((v) =>
       (qBare && bare(v.plateNumber).includes(qBare)) ||
       `${v.modelName} ${v.assignedTo}`.toLowerCase().includes(q)
     );
+    return found.sort(byContractFirst);
   }, [vehicles, query, fleet]);
 
   // The details are never blank: whenever nothing in the list is selected,

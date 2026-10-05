@@ -80,7 +80,13 @@ const vehicleSchema = new mongoose.Schema({
     roadTax: {
       expiresOn: { type: Date }
     }
-  }
+  },
+
+  // A sample vehicle from before the real fleet went in, kept only because the
+  // website's "Rent Our Vehicles" section shows it. Set by scripts/live-data.js,
+  // never through the API; the dashboard leaves these out unless "Show sample
+  // data" is on in Site Settings.
+  sample: { type: Boolean },
 }, { timestamps: true });
 
 // Vehicles are counted, moved and listed per client (assignedTo).
