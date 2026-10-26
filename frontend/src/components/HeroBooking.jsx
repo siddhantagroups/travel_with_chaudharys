@@ -79,7 +79,7 @@ export default function HeroBooking({ routes, onSearch, onContractSubmit, active
     const start = () => {
       if (cancelled) return;
       v.muted = true;
-      v.src = '/hero.mp4';
+      v.src = '/hero-hd.mp4';
       v.play().catch(() => { /* autoplay refused — the poster stays */ });
     };
     const whenIdle = () => {
@@ -275,7 +275,7 @@ export default function HeroBooking({ routes, onSearch, onContractSubmit, active
           muted
           playsInline
           preload="none"
-          poster="/hero-poster.webp"
+          poster="/hero-hd-poster.webp"
           onPlaying={handleHeroVideoPlaying}
           onEnded={handleHeroVideoEnded}
           tabIndex={-1}
