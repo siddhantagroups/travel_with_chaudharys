@@ -6,7 +6,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    host: true, // Needed for Docker container mapping
+    // This computer only. The Docker image serves the built site with Nginx,
+    // so the dev server never needs to listen on the network; to try the site
+    // on a phone over Wi-Fi, run `npm run dev -- --host`.
+    host: 'localhost',
     // Same-origin API in development, exactly like production (where Nginx
     // forwards /api): the admin session cookie and CSRF checks then behave
     // the same locally as on the live site, and no CORS is needed.

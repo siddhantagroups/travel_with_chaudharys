@@ -1160,6 +1160,10 @@ app.use((err, req, res, next) => {
 
 // Start Server
 reportAuthConfig();
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Only reachable from this machine (Nginx or the Vite dev proxy); the API is
+// never meant to be hit directly. Docker sets HOST=0.0.0.0 so the frontend
+// container can reach it over the compose network.
+const HOST = process.env.HOST || '127.0.0.1';
+app.listen(PORT, HOST, () => {
+  console.log(`Server running on ${HOST}:${PORT}`);
 });
