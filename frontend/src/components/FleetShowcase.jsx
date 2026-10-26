@@ -16,7 +16,7 @@ export default function FleetShowcase({ vehicles, onSelectVehicleForTrip }) {
   // Real photos of our own vehicles, keyed by plate. Anything without one yet
   // falls back to the type-level stock image below.
   const vehiclePhotos = {
-    'HR-49-E-5001': '/vehicle-innova-crysta-grey.webp',
+    'HR-49-E-5001': '/vehicle-innova-crysta-white.webp',
     'HR-49-F-6001': '/vehicle-chaudhary-ac-coach.webp',
     'HR-49-F-6002': '/vehicle-chaudhary-transport-bus.webp',
     'HR-49-G-7001': '/vehicle-innova-crysta.webp',

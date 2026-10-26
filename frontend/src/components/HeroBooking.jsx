@@ -65,9 +65,12 @@ export default function HeroBooking({ routes, onSearch, onContractSubmit, active
   // The intro video is the heaviest thing on the page. It starts only once the
   // page has finished loading and the browser is idle, so it never competes
   // with the form, text and images for bandwidth or the main thread; until
-  // then the still poster shows. H.264 MP4 (305 KB) rather than a smaller VP9
-  // WebM: measured on a throttled phone, VP9 cost ~370 ms of main-thread time
-  // to start versus ~90 ms for H.264. Visitors with Data Saver on keep the poster.
+  // then the still poster shows. Full resolution (1928x1072), encoded from the
+  // original at near-lossless quality (x264 CRF 18, ~2.7 MB): the hero is
+  // full-screen, zoomed on laptops and tablets, and freezes on its last frame,
+  // so a smaller file reads as blurry. H.264 rather than VP9: measured on a
+  // throttled phone, VP9 cost ~370 ms of main-thread time to start versus
+  // ~90 ms for H.264. Visitors with Data Saver on keep the poster.
   useEffect(() => {
     const v = videoRef.current;
     if (!v || navigator.connection?.saveData) return undefined;
